@@ -180,6 +180,14 @@ pub trait PermutationAirBuilder: ExtensionBuilder {
     fn permutation_randomness(&self) -> &[Self::RandomVar];
 }
 
+pub trait InteractionAirBuilder: AirBuilder {
+    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(&mut self, data: Data, count: Count);
+}
+
+pub trait ExtensionBuilderWithRlc: ExtensionBuilder {
+    fn calculate_rlc<Data: Iterator<Item: Into<Self::Expr>>>(&self, data: Data) -> Self::ExprEF;
+}
+
 #[derive(Debug)]
 pub struct FilteredAirBuilder<'a, AB: AirBuilder> {
     pub inner: &'a mut AB,

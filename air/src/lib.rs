@@ -1,10 +1,15 @@
 //! APIs for AIRs, and generalizations like PAIRs.
 
-#![no_std]
+// #![no_std]
 
 extern crate alloc;
 
 mod air;
+mod extraction;
+mod logup;
+mod symbolic_builder;
+mod symbolic_expression;
+mod symbolic_variable;
 pub mod utils;
 mod virtual_column;
 

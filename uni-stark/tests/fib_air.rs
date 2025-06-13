@@ -1,6 +1,6 @@
 use core::borrow::Borrow;
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::{DuplexChallenger, HashChallenger, SerializingChallenger32};
 use p3_commit::ExtensionMmcs;
@@ -15,11 +15,37 @@ use p3_merkle_tree::{MerkleTreeHidingMmcs, MerkleTreeMmcs};
 use p3_symmetric::{
     CompressionFunctionFromHasher, PaddingFreeSponge, SerializingHasher, TruncatedPermutation,
 };
-use p3_uni_stark::{StarkConfig, prove, verify};
+use p3_uni_stark::{prove, verify, DebugConstraintBuilder, StarkConfig};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-/// For testing the public values feature
+const NUM_FIBONACCI_COLS: usize = 3;
+
+/// For testing modularity
+
+pub trait MultiTableAirBuilder<'sum>: PermutationAirBuilder {
+    type LogUpSum: Into<Self::ExprEF> + Copy;
+
+    fn cumulative_sum(&self) -> &'sum Self::LogUpSum;
+}
+
+
+
+
+
+
+
+
+
+
+pub struct AddGadget {}
+
+impl<F> BaseAir<F> for AddGadget {
+    fn width(&self) -> usize {
+        NUM_FIBONACCI_COLS
+    }
+}
+
 pub struct FibonacciAir {}
 
 impl<F> BaseAir<F> for FibonacciAir {
@@ -28,8 +54,40 @@ impl<F> BaseAir<F> for FibonacciAir {
     }
 }
 
-impl<AB: AirBuilderWithPublicValues> Air<AB> for FibonacciAir {
-    fn eval(&self, builder: &mut AB) {
+impl<Builder: PermutationAirBuilder> Air<Builder> for AddGadget {
+    fn eval(&self, builder: &mut Builder) {
+        let main = builder.main();
+
+        let local = main
+            .row_slice(0)
+            .expect("Matrix is empty?");
+
+        let local_left = (*local)[0];
+        let local_right = (*local)[1];
+        let local_sum = (*local)[2];
+        
+        builder.assert_eq(local_left + local_right, local_sum);
+    }
+}
+
+impl<'a, F> Air<DebugConstraintBuilder<'a, F>> for AddGadget {
+    fn eval(&self, builder: &mut Builder) {
+        let main = builder.main();
+
+        let local = main
+            .row_slice(0)
+            .expect("Matrix is empty?");
+
+        let local_left = (*local)[0];
+        let local_right = (*local)[1];
+        let local_sum = (*local)[2];
+        
+        builder.assert_eq(local_left + local_right, local_sum);
+    }
+}
+
+impl<Builder: AirBuilderWithPublicValues> Air<Builder> for FibonacciAir {
+    fn eval(&self, builder: &mut Builder) {
         let main = builder.main();
 
         let pis = builder.public_values();
@@ -42,68 +100,52 @@ impl<AB: AirBuilderWithPublicValues> Air<AB> for FibonacciAir {
             main.row_slice(0).expect("Matrix is empty?"),
             main.row_slice(1).expect("Matrix only has 1 row?"),
         );
-        let local: &FibonacciRow<AB::Var> = (*local).borrow();
-        let next: &FibonacciRow<AB::Var> = (*next).borrow();
 
-        let mut when_first_row = builder.when_first_row();
+        let local_left = (*local)[0];
+        let local_right = (*local)[1];
+        let local_sum = (*local)[2];
+        
+        let next_left = (*next)[0];
+        let next_right = (*next)[1];
+        
+        // Link one row to the next
+        builder.when_transition().assert_eq(next_left, local_right);
+        builder.when_transition().assert_eq(next_right, local_sum);
 
-        when_first_row.assert_eq(local.left, a);
-        when_first_row.assert_eq(local.right, b);
-
-        let mut when_transition = builder.when_transition();
-
-        // a' <- b
-        when_transition.assert_eq(local.right, next.left);
-
-        // b' <- a + b
-        when_transition.assert_eq(local.left + local.right, next.right);
-
-        builder.when_last_row().assert_eq(local.right, x);
+        // Connect the public inputs
+        builder.when_first_row().assert_eq(local_left, a);
+        builder.when_first_row().assert_eq(local_right, b);
+        builder.when_last_row().assert_eq(local_sum, x);
     }
 }
 
 pub fn generate_trace_rows<F: PrimeField64>(a: u64, b: u64, n: usize) -> RowMajorMatrix<F> {
     assert!(n.is_power_of_two());
 
-    let mut trace = RowMajorMatrix::new(F::zero_vec(n * NUM_FIBONACCI_COLS), NUM_FIBONACCI_COLS);
+    let mut trace = RowMajorMatrix::new(
+        F::zero_vec(n * NUM_FIBONACCI_COLS),
+        NUM_FIBONACCI_COLS
+    );
 
-    let (prefix, rows, suffix) = unsafe { trace.values.align_to_mut::<FibonacciRow<F>>() };
-    assert!(prefix.is_empty(), "Alignment should match");
-    assert!(suffix.is_empty(), "Alignment should match");
-    assert_eq!(rows.len(), n);
-
-    rows[0] = FibonacciRow::new(F::from_u64(a), F::from_u64(b));
+    let a_f = F::from_u64(a);
+    let b_f = F::from_u64(b);
+    trace.row_mut(0)[0] = a_f;
+    trace.row_mut(0)[1] = b_f;
+    if a == 0 {
+        trace.row_mut(0)[2] = a_f + b_f;
+    } else {
+        trace.row_mut(0)[2] = a_f + b_f;
+    }
 
     for i in 1..n {
-        rows[i].left = rows[i - 1].right;
-        rows[i].right = rows[i - 1].left + rows[i - 1].right;
+        let a_f = (*trace.row_slice(i-1).unwrap())[1];
+        trace.row_mut(i)[0] = a_f;
+        let b_f = (*trace.row_slice(i-1).unwrap())[2];
+        trace.row_mut(i)[1] = b_f;
+        trace.row_mut(i)[2] = a_f + b_f;
     }
 
     trace
-}
-
-const NUM_FIBONACCI_COLS: usize = 2;
-
-pub struct FibonacciRow<F> {
-    pub left: F,
-    pub right: F,
-}
-
-impl<F> FibonacciRow<F> {
-    const fn new(left: F, right: F) -> Self {
-        Self { left, right }
-    }
-}
-
-impl<F> Borrow<FibonacciRow<F>> for [F] {
-    fn borrow(&self) -> &FibonacciRow<F> {
-        debug_assert_eq!(self.len(), NUM_FIBONACCI_COLS);
-        let (prefix, shorts, suffix) = unsafe { self.align_to::<FibonacciRow<F>>() };
-        debug_assert!(prefix.is_empty(), "Alignment should match");
-        debug_assert!(suffix.is_empty(), "Alignment should match");
-        debug_assert_eq!(shorts.len(), 1);
-        &shorts[0]
-    }
 }
 
 type Val = BabyBear;
@@ -128,7 +170,8 @@ fn test_public_value_impl(n: usize, x: u64, log_final_poly_len: usize) {
     let val_mmcs = ValMmcs::new(hash, compress);
     let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
     let dft = Dft::default();
-    let trace = generate_trace_rows::<Val>(0, 1, n);
+    let fib_trace = generate_trace_rows::<Val>(0, 1, n);
+    let add_trace = generate_trace_rows::<Val>(1, 1, n);
     let fri_config = create_test_fri_config(challenge_mmcs, log_final_poly_len);
     let pcs = Pcs::new(dft, val_mmcs, fri_config);
     let challenger = Challenger::new(perm);
@@ -136,8 +179,13 @@ fn test_public_value_impl(n: usize, x: u64, log_final_poly_len: usize) {
     let config = MyConfig::new(pcs, challenger);
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::from_u64(x)];
 
-    let proof = prove(&config, &FibonacciAir {}, trace, &pis);
-    verify(&config, &FibonacciAir {}, &proof, &pis).expect("verification failed");
+    let proof = prove(&config, &FibonacciAir {}, fib_trace, &pis);
+    verify(&config, &FibonacciAir {}, &proof, &pis).expect("FibonacciAir verification failed");
+
+    let proof = prove(&config, &AddGadget {}, add_trace, &pis);
+    verify(&config, &AddGadget {}, &proof, &pis).expect("AddGadget verification failed");
+
+    assert!(false);
 }
 
 #[test]

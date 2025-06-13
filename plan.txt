@@ -1,0 +1,144 @@
+Find examples
+    uni_stark
+        evaluate tests
+            fib_air
+            mul_air
+                
+Do they use debug constraint gen or some other?
+    check_constraints uses DebugAirBuilder
+    prover uses SymbolicAirBuilder apparently. Where?
+        get_symbolic_constraints
+        print from prover?
+            Seems to work well
+                Need to clarify the details of what the SymbolicVariable types mean
+                    Main offset vs SymbolicVariable index?
+                        Is offset rotation and index column?
+                What is degree_multiple and do we need it?
+Why no_std?
+    How to deal with no_std?
+Does it store constraints in a usable form that can be taken at the end, or does this need to be implemented
+    Return symbolic_constraints from prove/split generating them into its own method that prove then uses?
+        get_symolic_constraints already exists, but is it usable or does it require constructs created during prove?
+Basic output
+    Absolute basic level seems to be working in prove, printing symbolic constraints
+Lean output
+Modularity?
+    get_symbolic_constraints currently returns a vector
+        Does this just need to be nested, or are there more advanced structures at play?
+    Does plonky3 contain any notion of gadgets?
+    How are existing examples structured?
+
+
+Multi-Air
+    Does it reduce down to an AIR, or is it it's own thing
+        Option 1: If reduces down to AIR
+            Required methods:
+                width -> usize
+                preprocessed_trace -> Option<Matrix>
+                eval -> mutates a builder
+            How to decide on a width or a single preprocessed trace?
+                Some sort of swappable layouter?
+            Naively it seems possible to have an eval definition which just batches
+                However because eval modifies the given builder, we need to first lay out the AIRs into one big one and then run eval on that
+                Alternatively a separate builder per AIR, but that's just Option 2
+            Would allow the use of prove/verify methods as is
+
+            MultiBuider, which seems to do this, is never used
+        Option 2: If its own thing
+            Needs some way to use prove/verify methods that are written for a single AIR
+                Swappable proof combination method?
+    Permutations
+        PermutationAirBuilder::permutation() returns the permutation trace, analogous to the main trace itself
+            What the permutation trace is and how it's used seem to be algorithm dependant?
+            AirBuilder has assert_zero for creating constraints, there does not seem to be an equivalent for creating permutation constraints
+            Even if we have some structure detailing the 'connections' in the MultiAIR, how do we make the user written eval use it
+                Do we need to make them/do it ourselves, or is simply providing the information good enough?
+    WHy does SP1 have local and global interactions?
+    Either need to be able to derive lookups from raw constraints (only possible if we know what lookup protocol was used), or we need to extend symbolic constraints with symbolic lookups too, that then are somehow required to be used
+        Symbolic constraints are only actually used to calculate the degree currently
+        LookupBuilder that adds some assert_lookup method, and then plonky3 gives options for implementations
+            If we let the user define implementations we can't guarantee what they actually do, so formal verification becomes at least weaker
+    Is SymbolicAirBuilder in unistark because that's the first time it was needed, or because it's actually specific to uni-stark? Would it be different in multi-stark? Plonk?
+        The is_transition implementation is uni-stark specific (transition window of 2)
+    generate_permutation_constraints vs eval_permutation_constraints
+        generate doesn't use a builder, so doesn't use the permutation() method to get the permutation trace, it just calculates a matrix that should be the values in the permutation trace
+        generate is witness generation, eval is constraint generation?
+    So far, each chip is dealt with individually. How are they combined?
+        verify_constraints is just called on each chip that is used individually
+            So how do the permutation (which should be called Lookup?!) look at another chip
+
+
+
+
+What is the structure? One big thing or lots of small ones that somehow interact?
+
+
+
+crates/recursion/circuit/src/stark.rs line 475, sum of all local cumulative sums is assert_zero
+    negative vs positive multiplicities mean that this should mean that every send is matched by a receive?
+    What about in the non-recursion verifier?
+crates/stark/src/verifier always asserts local cumulative sum to zero
+    Because this is the sum of all the cumulative sums of all the chips
+
+
+Unambiguous column terminology?
+    Send/receive and input/output are ambiguous
+        I had envisioned 'output' containing the possible values, and 'input' being the use of such a value
+            But it could be the other way round, a chip outputting values to be included in the larger set
+        Do you visualise it as going from subset to superset or superset to subset
+            Could we just call it SuperSet and SubSet, SuperColumn, SubColumn, etc?
+                Run into issues with the fact that lookups actually work on tuples of columns
+
+Structure terminology
+    Circuit containing many gadgets?
+    Chip?
+    For now I'm using chip and gadget interchangeably
+
+SP1 uses 1 and -1 multiplicities
+    In theory this should describe a permutation rather than a lookup, as the multiplicity is how many times an item is included
+    Are there 'counts' included somewhere?
+
+Summing all cumulative sums to zero does not pair them up, just asserts that every subset member has a corresponding superset member
+    In theory, someone could want this behaviour
+        Either because they actually just want to lookup from any of multiple tables
+        Or because they want to do their own tagging
+        We should allow untagged columns, but probably with some form of warning, at least in documentation
+    Preprocessed tag vs witness tag
+        Need to track down exactly where preprocessed values are assigned 
+            Our infrastructure would need to set them
+        Preprocessed superset tag would make sense as it should be a constant column with all the same values
+            The user should be able to opt out of this in some way
+                How to prevent tagged subsets picking up values from untagged supersets that accidentally have the tag as their first values
+                    There should always be a column marked as the tag column
+                        There's no reason it couldn't be a witness column if the user chooses
+                            The RLC problem with zeroes is avoided by the field extension offset
+                                CHECK
+            Unique field value for each Chip required
+                This affects structure
+                    If we want arbirarily nestable gadgets then we'd need to RLC the chip IDs
+                        Is there actually any benefit to arbitrarily nestable gadgets?
+    How do lookup selectors work
+        Is it possible to have selectors on both subset and superset columns
+            Naive way of having a selector in the tuple still constrains the 'off' rows
+
+One SuperMultiColumn(terminology??) per gadget/chip?
+    Not every chip needs one
+        Could have a subclass that has a SuperMultiColumn
+            Base class can connect but doesn't have to (so no penalty for being part of this infrastructure but only using one gadget)
+    Not a necessary restriction, but would enforce nice structure
+        Would it ever be problematically restrictive?
+    ID is actually per SuperMultiColumn not per gadget
+    Definitively need to be able to have multiple SubMultiColumns
+
+Each chip is just an AIR whose eval method takes a SubType of a Builder we write
+    Where our builder has methods to 'get' Vars for all lookup columns
+    We need somewhere to decide which chips are connected together
+        A naive way of doing this would end up with every chip being connected to every other chip even when it's not used
+            How does SP1 deal with this?
+
+DebugConstraintBuilder
+    Needs to be extended to be able to include ExtensionBuilder and PermutationAirBuilder
+        Don't want places where extension fields aren't used to have to provide one, as would be needed if we just included this Naively
+        Prove seems not to work currently for AIRs that have permutation constraints
+    Start of tomorrow, comment out and keep going first
+        Add later

@@ -26,7 +26,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
 /// How many `a * b = c` operations to do per row in the AIR.
-const REPETITIONS: usize = 20; // This should be < 255 so it can fit into a u8.
+const REPETITIONS: usize = 4; // This should be < 255 so it can fit into a u8.
 const TRACE_WIDTH: usize = REPETITIONS * 3;
 
 /*

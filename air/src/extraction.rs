@@ -4,7 +4,17 @@ use p3_baby_bear::BabyBear;
 use p3_field::{extension::BinomialExtensionField, Algebra, PrimeCharacteristicRing};
 use p3_matrix::Matrix;
 
-use crate::{logup::SymbolicLogupInteractionAirBuilder, symbolic_builder::{Interaction, SymbolicAirBuilder}, symbolic_expression::{symbolic_expression_to_string, SymbolicExpression}, symbolic_variable::{Entry, SymbolicVariable}, Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, InteractionAirBuilder};
+use crate::{
+    logup::SymbolicLogupInteractionAirBuilder,
+    symbolic_builder::{Interaction, SymbolicAirBuilder},
+    symbolic_expression::{symbolic_expression_to_string, SymbolicExpression},
+    symbolic_variable::SymbolicVariable,
+    Air,
+    AirBuilder,
+    AirBuilderWithPublicValues,
+    BaseAir,
+    InteractionAirBuilder
+};
 
 const NUM_FIBONACCI_COLS: usize = 3;
 

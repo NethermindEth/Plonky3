@@ -1,11 +1,11 @@
 use alloc::{fmt, format};
 use alloc::rc::Rc;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use core::fmt::Debug;
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use p3_field::{Algebra, ExtensionField, Field, InjectiveMonomial, PrimeCharacteristicRing};
+use p3_field::{Algebra, Field, InjectiveMonomial, PrimeCharacteristicRing};
 
 use crate::symbolic_variable::{Entry, SymbolicVariable};
 

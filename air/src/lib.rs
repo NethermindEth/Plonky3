@@ -1,16 +1,12 @@
 //! APIs for AIRs, and generalizations like PAIRs.
 
+// TODO build with no_std
 // #![no_std]
 
 extern crate alloc;
 
 mod air;
-mod extraction;
 pub mod logup;
-mod symbolic_logup;
-mod symbolic_builder;
-mod symbolic_expression;
-mod symbolic_variable;
 pub mod utils;
 mod virtual_column;
 

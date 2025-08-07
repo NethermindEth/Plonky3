@@ -1,7 +1,7 @@
-use p3_field::{Algebra, ExtensionField, Field, PrimeCharacteristicRing};
-use p3_matrix::{dense::RowMajorMatrix, Matrix};
+use p3_field::PrimeCharacteristicRing;
+use p3_matrix::Matrix;
 
-use crate::{symbolic_builder::SymbolicAirBuilder, symbolic_expression::SymbolicExpression, symbolic_variable::SymbolicVariable, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, ExtensionBuilderWithRlc, InteractionAirBuilder, PermutationAirBuilder};
+use crate::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, ExtensionBuilderWithRlc, InteractionAirBuilder, PermutationAirBuilder};
 
 #[derive(Debug)]
 pub struct LogupInteractionAirBuilder<'inner, AB: PermutationAirBuilder>
@@ -18,32 +18,6 @@ impl <'inner, AB: PermutationAirBuilder> LogupInteractionAirBuilder<'inner, AB> 
         }
     }
 }
-
-// impl<'inner, AB: PermutationAirBuilder> LogupInteractionAirBuilder<'inner, AB>
-// {
-//     pub fn interaction_count(&self) -> usize {
-//         self.builder.interactions().len()
-//     }
-
-//     pub fn finalise_constraints(mut self) -> Vec<SymbolicExpression<EF>> {
-//         self.constrain_cumulative_sum();
-
-//         let base_constraints = self
-//             .builder
-//             .base_constraints()
-//             .clone();
-
-//         let extension_constraints = self
-//             .builder
-//             .extension_constraints()
-//             .clone();
-
-//         extension_constraints
-//             .into_iter()
-//             .chain(base_constraints.into_iter().map(|x| x.into()))
-//             .collect()
-//     }
-// }
 
 impl <'inner, AB: PermutationAirBuilder> AirBuilder for LogupInteractionAirBuilder<'inner, AB>
 {

@@ -5,9 +5,7 @@ use p3_field::{extension::BinomialExtensionField, Algebra, PrimeCharacteristicRi
 use p3_matrix::Matrix;
 
 use crate::{
-    logup::SymbolicLogupInteractionAirBuilder,
-    symbolic_builder::{Interaction, SymbolicAirBuilder},
-    symbolic_expression::{symbolic_expression_to_string, SymbolicExpression},
+    symbolic_expression::SymbolicExpression,
     symbolic_variable::SymbolicVariable,
     Air,
     AirBuilder,
@@ -105,6 +103,12 @@ where
 
 #[test]
 fn print_constraints() {
+    use crate::symbolic_builder::{
+        Interaction,
+        SymbolicAirBuilder
+    };
+    use crate::symbolic_expression::symbolic_expression_to_string;
+
     let mut add_builder = SymbolicAirBuilder::<BabyBear, (), ()>::new(0, 3, 0, 0);
     let mut fib_builder = SymbolicAirBuilder::<BabyBear, (), ()>::new(0, 3, 3, 0);
 
@@ -188,6 +192,9 @@ impl Algebra<SymbolicExpression<BabyBear>> for SymbolicExpression<BinomialExtens
 
 #[test]
 fn logup_test() {
+    use crate::symbolic_logup::SymbolicLogupInteractionAirBuilder;
+    use crate::symbolic_expression::symbolic_expression_to_string;
+
     let mut add_builder = SymbolicLogupInteractionAirBuilder::<BabyBear, BinomialExtensionField<BabyBear, 4>, BinomialExtensionField<BabyBear, 4>>::new(0, 3, 0, 3);
     let mut fib_builder = SymbolicLogupInteractionAirBuilder::<BabyBear, BinomialExtensionField<BabyBear, 4>, BinomialExtensionField<BabyBear, 4>>::new(0, 3, 3, 3);
 

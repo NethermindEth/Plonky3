@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use p3_air::logup::LogupInteractionAirBuilder;
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, InteractionAirBuilder, PermutationAirBuilder};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PermutationAirBuilder};
 use p3_field::{ExtensionField, Field};
 use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
@@ -87,7 +87,7 @@ where
     let sum: ExtF = permutation_traces.iter().map(|trace| {
         let height = trace.height();
 
-        for i in (0..height) {
+        for i in 0..height {
             let local = trace.row_slice(i).unwrap();
             let next = trace.row_slice((i + 1) % height).unwrap();
             let permutation_trace = VerticalPair::new(
@@ -228,7 +228,7 @@ impl <'a, F: Field, ExtF: ExtensionField<F>> PermutationAirBuilder for DebugCons
 mod tests {
     use alloc::vec;
 
-    use p3_air::{BaseAir, BaseAirWithPublicValues};
+    use p3_air::{BaseAir, BaseAirWithPublicValues, InteractionAirBuilder};
     use p3_baby_bear::BabyBear;
     use p3_field::{extension::BinomialExtensionField, PrimeCharacteristicRing};
     use p3_matrix::dense::DenseMatrix;

@@ -227,6 +227,14 @@ impl<AB: AirBuilder> AirBuilder for FilteredAirBuilder<'_, AB> {
     }
 }
 
+impl<AB: AirBuilderWithPublicValues> AirBuilderWithPublicValues for FilteredAirBuilder<'_, AB> {
+    type PublicVar = AB::PublicVar;
+
+    fn public_values(&self) -> &[Self::PublicVar] {
+        self.inner.public_values()
+    }
+}
+
 impl<AB: ExtensionBuilder> ExtensionBuilder for FilteredAirBuilder<'_, AB> {
     type EF = AB::EF;
     type ExprEF = AB::ExprEF;

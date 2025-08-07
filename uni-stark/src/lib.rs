@@ -14,6 +14,7 @@ mod symbolic_variable;
 mod verifier;
 
 mod check_constraints;
+mod check_multitable_constraints;
 
 pub use check_constraints::*;
 pub use config::*;

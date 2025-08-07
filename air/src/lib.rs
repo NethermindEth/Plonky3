@@ -6,7 +6,7 @@ extern crate alloc;
 
 mod air;
 mod extraction;
-mod logup;
+pub mod logup;
 mod symbolic_builder;
 mod symbolic_expression;
 mod symbolic_variable;

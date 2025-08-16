@@ -141,6 +141,9 @@ impl<'inner, AB: PermutationAirBuilder> InteractionAirBuilder for LogupInteracti
 
 impl <'inner, AB: PermutationAirBuilder> LogupInteractionAirBuilder<'inner, AB>
 {
+    // Takes all the registered interactions and renders them down into a set of constraints,
+    // using 1 column of the permutation trace per interaction, and then the next column for the cumulative sum
+    // Should be called only once
     pub fn constrain_cumulative_sum(&mut self) {
         let permutation_trace = self
             .inner

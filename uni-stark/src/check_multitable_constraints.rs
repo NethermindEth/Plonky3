@@ -398,8 +398,8 @@ mod tests {
         println!("Perm0: {perm_0:?}");
         println!("Perm1: {perm_1:?}");
 
-        let cum_sum = perm_0 + perm_1;
-        println!("Cum sum: {cum_sum:?}");
+        let cumulative_sum = perm_0 + perm_1;
+        println!("Cumulative sum: {cumulative_sum:?}");
 
         // A single-row matrix still performs a wraparound check with itself.
         // row[0] == row[0] + 1 ⇒ fails unless handled properly by transition logic.
@@ -412,9 +412,9 @@ mod tests {
         let row_main = RowMajorMatrix::new(row_values, 2);
         let row_permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![
             perm_0 + perm_1,
-            cum_sum,
+            cumulative_sum,
             perm_1,
-            cum_sum,
+            cumulative_sum,
         ], 2);
 
         let shuffle_air = ColumnShuffleAir;
@@ -425,9 +425,9 @@ mod tests {
         let shuffle_main = RowMajorMatrix::new(shuffle_values, 1);
         let shuffle_permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![
             -perm_0 - perm_1,
-            -cum_sum,
+            -cumulative_sum,
             -perm_0,
-            -cum_sum
+            -cumulative_sum
         ], 2);
         check_multitable_constraints(
             &row_air,

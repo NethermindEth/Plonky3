@@ -1,11 +1,14 @@
 use alloc::vec::Vec;
 
-use p3_air::{AirBuilder, AirBuilderWithPublicValues};
-use p3_field::{BasedVectorSpace, PackedField};
+use p3_air::{
+    AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, ExtensionBuilderWithRlc,
+    PermutationAirBuilder,
+};
+use p3_field::{Algebra, BasedVectorSpace, PackedField};
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
-use crate::{PackedChallenge, PackedVal, StarkGenericConfig, Val};
+use crate::{PackedChallenge, PackedVal, StarkGenericConfig, Val, config};
 
 #[derive(Debug)]
 pub struct ProverConstraintFolder<'a, SC: StarkGenericConfig> {
@@ -94,6 +97,31 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for ProverConstraintFold
     }
 }
 
+// impl<'a, SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'_, SC>
+// // where
+// // SC::Challenge: Algebra<
+// //     <<<<SC as config::StarkGenericConfig>::Pcs as p3_commit::Pcs<
+// //         <SC as config::StarkGenericConfig>::Challenge,
+// //         <SC as config::StarkGenericConfig>::Challenger,
+// //     >>::Domain as p3_commit::PolynomialSpace>::Val as p3_field::Field>::Packing,
+// // >,
+// {
+//     type EF = SC::Challenge;
+//
+//     type ExprEF = SC::Challenge;
+//
+//     type VarEF = SC::Challenge;
+//
+//     fn assert_zero_ext<I>(&mut self, x: I)
+//     where
+//         I: Into<Self::ExprEF>,
+//     {
+//         let alpha_power = self.alpha_powers[self.constraint_index];
+//         self.accumulator += alpha_power * x.into();
+//         self.constraint_index += 1;
+//     }
+// }
+
 impl<'a, SC: StarkGenericConfig> AirBuilder for VerifierConstraintFolder<'a, SC> {
     type F = Val<SC>;
     type Expr = SC::Challenge;
@@ -134,5 +162,22 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for VerifierConstraintFo
 
     fn public_values(&self) -> &[Self::F] {
         self.public_values
+    }
+}
+
+impl<SC: StarkGenericConfig> ExtensionBuilder for VerifierConstraintFolder<'_, SC> {
+    type EF = SC::Challenge;
+
+    type ExprEF = SC::Challenge;
+
+    type VarEF = SC::Challenge;
+
+    fn assert_zero_ext<I>(&mut self, x: I)
+    where
+        I: Into<Self::ExprEF>,
+    {
+        let x: SC::Challenge = x.into();
+        self.accumulator *= self.alpha;
+        self.accumulator += x;
     }
 }

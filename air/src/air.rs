@@ -1,6 +1,6 @@
 use core::ops::{Add, Mul, Sub};
 
-use p3_field::{Algebra, ExtensionField, Field, PrimeCharacteristicRing};
+use p3_field::{Algebra, ExtensionField, Field, PackedValue, PrimeCharacteristicRing};
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
 
@@ -181,7 +181,11 @@ pub trait PermutationAirBuilder: ExtensionBuilder {
 }
 
 pub trait InteractionAirBuilder: AirBuilder {
-    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(&mut self, data: Data, count: Count);
+    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(
+        &mut self,
+        data: Data,
+        count: Count,
+    );
 }
 
 pub trait ExtensionBuilderWithRlc: ExtensionBuilder {

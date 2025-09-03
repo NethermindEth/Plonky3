@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::Air;
+use p3_air::{Air, ExtensionBuilder};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
@@ -26,11 +26,12 @@ enum Loc {
     SubLhs,
     SubRhs,
     Neg,
-    Top
+    Top,
 }
 
 fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, loc: Loc) -> String
-    where F : std::fmt::Debug
+where
+    F: std::fmt::Debug,
 {
     match expression {
         SymbolicExpression::Variable(symbolic_variable) => format!(
@@ -48,7 +49,11 @@ fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, loc: Loc
         SymbolicExpression::IsLastRow => "IsLastRow".to_string(),
         SymbolicExpression::IsTransition => "IsTransition".to_string(),
         SymbolicExpression::Constant(x) => format!("constant{x:?}"),
-        SymbolicExpression::Add { x, y, degree_multiple: _ } => {
+        SymbolicExpression::Add {
+            x,
+            y,
+            degree_multiple: _,
+        } => {
             if loc == Loc::MulLhs || loc == Loc::MulRhs || loc == Loc::Neg {
                 format!(
                     "({} + {})",
@@ -69,7 +74,11 @@ fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, loc: Loc
                 )
             }
         }
-        SymbolicExpression::Sub { x, y, degree_multiple: _ } => {
+        SymbolicExpression::Sub {
+            x,
+            y,
+            degree_multiple: _,
+        } => {
             if loc == Loc::AddLhs || loc == Loc::AddRhs || loc == Loc::Top {
                 format!(
                     "{} - {}",
@@ -84,13 +93,17 @@ fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, loc: Loc
                 )
             }
         }
-        SymbolicExpression::Neg { x, degree_multiple: _ } => {
-            format!(
-                "-{}",
-                symbolic_expression_to_string(x, Loc::Neg)
-            )
+        SymbolicExpression::Neg {
+            x,
+            degree_multiple: _,
+        } => {
+            format!("-{}", symbolic_expression_to_string(x, Loc::Neg))
         }
-        SymbolicExpression::Mul { x, y, degree_multiple: _ } => {
+        SymbolicExpression::Mul {
+            x,
+            y,
+            degree_multiple: _,
+        } => {
             format!(
                 "{} * {}",
                 symbolic_expression_to_string(x, Loc::MulLhs),
@@ -127,7 +140,10 @@ where
 
     let symbolic_constraints = get_symbolic_constraints::<Val<SC>, A>(air, 0, public_values.len());
     for (idx, constraint) in symbolic_constraints.iter().enumerate() {
-        println!("{idx}: {} = 0\n", symbolic_expression_to_string(constraint, Loc::Top));
+        println!(
+            "{idx}: {} = 0\n",
+            symbolic_expression_to_string(constraint, Loc::Top)
+        );
     }
     let constraint_count = symbolic_constraints.len();
     let constraint_degree = symbolic_constraints

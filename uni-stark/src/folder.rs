@@ -4,7 +4,7 @@ use p3_air::{
     AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, ExtensionBuilderWithRlc,
     PermutationAirBuilder,
 };
-use p3_field::{Algebra, BasedVectorSpace, PackedField};
+use p3_field::{Algebra, BasedVectorSpace, PackedField, PackedValue};
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
@@ -97,30 +97,22 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for ProverConstraintFold
     }
 }
 
-// impl<'a, SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'_, SC>
-// // where
-// // SC::Challenge: Algebra<
-// //     <<<<SC as config::StarkGenericConfig>::Pcs as p3_commit::Pcs<
-// //         <SC as config::StarkGenericConfig>::Challenge,
-// //         <SC as config::StarkGenericConfig>::Challenger,
-// //     >>::Domain as p3_commit::PolynomialSpace>::Val as p3_field::Field>::Packing,
-// // >,
-// {
-//     type EF = SC::Challenge;
-//
-//     type ExprEF = SC::Challenge;
-//
-//     type VarEF = SC::Challenge;
-//
-//     fn assert_zero_ext<I>(&mut self, x: I)
-//     where
-//         I: Into<Self::ExprEF>,
-//     {
-//         let alpha_power = self.alpha_powers[self.constraint_index];
-//         self.accumulator += alpha_power * x.into();
-//         self.constraint_index += 1;
-//     }
-// }
+impl<SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'_, SC> {
+    type EF = SC::Challenge;
+
+    type ExprEF = PackedChallenge<SC>;
+
+    type VarEF = SC::Challenge;
+
+    fn assert_zero_ext<I>(&mut self, x: I)
+    where
+        I: Into<Self::ExprEF>,
+    {
+        let alpha_power = self.alpha_powers[self.constraint_index];
+        self.accumulator += x.into() * alpha_power;
+        self.constraint_index += 1;
+    }
+}
 
 impl<'a, SC: StarkGenericConfig> AirBuilder for VerifierConstraintFolder<'a, SC> {
     type F = Val<SC>;

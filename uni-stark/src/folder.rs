@@ -5,13 +5,18 @@ use p3_air::{
     PermutationAirBuilder,
 };
 use p3_field::{Algebra, BasedVectorSpace, PackedField, PackedValue};
-use p3_matrix::dense::RowMajorMatrixView;
+use p3_matrix::dense::*;
 use p3_matrix::stack::VerticalPair;
 
 use crate::{PackedChallenge, PackedVal, StarkGenericConfig, Val, config};
 
 #[derive(Debug)]
 pub struct ProverConstraintFolder<'a, SC: StarkGenericConfig> {
+    pub perm: VerticalPair<
+        RowMajorMatrixView<'a, PackedChallenge<SC>>,
+        RowMajorMatrixView<'a, PackedChallenge<SC>>,
+    >,
+    pub perm_challenges: &'a [PackedChallenge<SC>],
     pub main: RowMajorMatrixView<'a, PackedVal<SC>>,
     pub public_values: &'a Vec<Val<SC>>,
     pub is_first_row: PackedVal<SC>,
@@ -27,6 +32,9 @@ type ViewPair<'a, T> = VerticalPair<RowMajorMatrixView<'a, T>, RowMajorMatrixVie
 
 #[derive(Debug)]
 pub struct VerifierConstraintFolder<'a, SC: StarkGenericConfig> {
+    pub perm:
+        VerticalPair<RowMajorMatrixView<'a, SC::Challenge>, RowMajorMatrixView<'a, SC::Challenge>>,
+    pub perm_challenges: &'a [SC::Challenge],
     pub main: ViewPair<'a, SC::Challenge>,
     pub public_values: &'a Vec<Val<SC>>,
     pub is_first_row: SC::Challenge,
@@ -102,7 +110,7 @@ impl<SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'_, SC>
 
     type ExprEF = PackedChallenge<SC>;
 
-    type VarEF = SC::Challenge;
+    type VarEF = PackedChallenge<SC>;
 
     fn assert_zero_ext<I>(&mut self, x: I)
     where
@@ -111,6 +119,23 @@ impl<SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'_, SC>
         let alpha_power = self.alpha_powers[self.constraint_index];
         self.accumulator += x.into() * alpha_power;
         self.constraint_index += 1;
+    }
+}
+
+impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for ProverConstraintFolder<'a, SC> {
+    type MP = VerticalPair<
+        RowMajorMatrixView<'a, PackedChallenge<SC>>,
+        RowMajorMatrixView<'a, PackedChallenge<SC>>,
+    >;
+
+    type RandomVar = PackedChallenge<SC>;
+
+    fn permutation(&self) -> Self::MP {
+        self.perm
+    }
+
+    fn permutation_randomness(&self) -> &[Self::RandomVar] {
+        self.perm_challenges
     }
 }
 
@@ -171,5 +196,19 @@ impl<SC: StarkGenericConfig> ExtensionBuilder for VerifierConstraintFolder<'_, S
         let x: SC::Challenge = x.into();
         self.accumulator *= self.alpha;
         self.accumulator += x;
+    }
+}
+
+impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for VerifierConstraintFolder<'a, SC> {
+    type MP =
+        VerticalPair<RowMajorMatrixView<'a, SC::Challenge>, RowMajorMatrixView<'a, SC::Challenge>>;
+    type RandomVar = SC::Challenge;
+
+    fn permutation(&self) -> Self::MP {
+        self.perm
+    }
+
+    fn permutation_randomness(&self) -> &[SC::Challenge] {
+        self.perm_challenges
     }
 }

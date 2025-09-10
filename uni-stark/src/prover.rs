@@ -369,6 +369,8 @@ where
                 decomposed_alpha_powers: &decomposed_alpha_powers,
                 accumulator,
                 constraint_index: 0,
+                perm: todo!(),
+                perm_challenges: todo!(),
             };
             air.eval(&mut folder);
 

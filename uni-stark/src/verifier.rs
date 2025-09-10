@@ -203,6 +203,8 @@ where
         is_transition: sels.is_transition,
         alpha,
         accumulator: SC::Challenge::ZERO,
+        perm: todo!(),
+        perm_challenges: todo!(),
     };
     air.eval(&mut folder);
     let folded_constraints = folder.accumulator;

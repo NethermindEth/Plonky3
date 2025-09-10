@@ -5,7 +5,7 @@ use p3_air::{
     PermutationAirBuilder,
 };
 use p3_field::{Algebra, BasedVectorSpace, PackedField, PackedValue};
-use p3_matrix::dense::*;
+use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
 use crate::{PackedChallenge, PackedVal, StarkGenericConfig, Val, config};

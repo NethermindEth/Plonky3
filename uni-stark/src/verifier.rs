@@ -95,11 +95,18 @@ where
     challenger.observe(commitments.trace.clone());
     challenger.observe_slice(public_values);
 
+    challenger.observe(commitments.permutation_trace.clone());
+
     // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
     // into a single polynomial.
     //
     // Soundness Error: n/|EF| where n is the number of constraints.
     let alpha: SC::Challenge = challenger.sample_algebra_element();
+
+    let perm_challenges = (0..2)
+        .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
+        .collect::<Vec<SC::Challenge>>();
+
     challenger.observe(commitments.quotient_chunks.clone());
 
     // We've already checked that commitments.random is present if and only if ZK is enabled.

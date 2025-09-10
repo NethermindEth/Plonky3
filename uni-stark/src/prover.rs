@@ -6,8 +6,8 @@ use p3_air::{Air, ExtensionBuilder};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
-use p3_matrix::Matrix;
-use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
+use p3_matrix::{Matrix, stack::VerticalPair};
 use p3_maybe_rayon::prelude::*;
 use p3_util::{log2_ceil_usize, log2_strict_usize};
 use tracing::{debug_span, info_span, instrument};
@@ -123,6 +123,7 @@ pub fn prove<
     config: &SC,
     air: &A,
     trace: RowMajorMatrix<Val<SC>>,
+    permutation_trace: RowMajorMatrix<Val<SC>>,
     public_values: &Vec<Val<SC>>,
 ) -> Proof<SC>
 where
@@ -170,6 +171,11 @@ where
     challenger.observe(trace_commit.clone());
     challenger.observe_slice(public_values);
 
+    let permutation_trace = permutation_trace.flatten_to_base();
+    let (permutation_commit, permutation_data) = pcs.commit([(trace_domain, permutation_trace)]);
+
+    challenger.observe(permutation_commit.clone());
+
     // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
     // into a single polynomial.
     //
@@ -196,6 +202,12 @@ where
         ext_trace_domain.create_disjoint_domain(1 << (log_ext_degree + log_quotient_degree));
 
     let trace_on_quotient_domain = pcs.get_evaluations_on_domain(&trace_data, 0, quotient_domain);
+    let permutation_trace_on_quotient_domain =
+        pcs.get_evaluations_on_domain(&permutation_data, 0, quotient_domain);
+
+    let perm_challenges = (0..2)
+        .map(|_| challenger.sample_algebra_element::<SC::Challenge>().into())
+        .collect::<Vec<PackedChallenge<SC>>>();
 
     let quotient_values = quotient_values(
         air,
@@ -203,7 +215,9 @@ where
         trace_domain,
         quotient_domain,
         trace_on_quotient_domain,
+        permutation_trace_on_quotient_domain,
         alpha,
+        &perm_challenges,
         constraint_count,
     );
 
@@ -234,6 +248,7 @@ where
 
     let commitments = Commitments {
         trace: trace_commit,
+        permutation_trace: permutation_commit,
         quotient_chunks: quotient_commit,
         random: opt_r_commit.clone(),
     };
@@ -305,7 +320,9 @@ fn quotient_values<SC, A, Mat>(
     trace_domain: Domain<SC>,
     quotient_domain: Domain<SC>,
     trace_on_quotient_domain: Mat,
+    permutation_trace_on_quotient_domain: Mat,
     alpha: SC::Challenge,
+    perm_challenges: &[PackedChallenge<SC>],
     constraint_count: usize,
 ) -> Vec<SC::Challenge>
 where
@@ -315,11 +332,13 @@ where
 {
     let quotient_size = quotient_domain.size();
     let width = trace_on_quotient_domain.width();
+    let perm_width = permutation_trace_on_quotient_domain.width();
     let mut sels = debug_span!("Compute Selectors")
         .in_scope(|| trace_domain.selectors_on_coset(quotient_domain));
 
     let qdb = log2_strict_usize(quotient_domain.size()) - log2_strict_usize(trace_domain.size());
     let next_step = 1 << qdb;
+    let ext_degree = SC::Challenge::DIMENSION;
 
     // We take PackedVal::<SC>::WIDTH worth of values at a time from a quotient_size slice, so we need to
     // pad with default values in the case where quotient_size is smaller than PackedVal::<SC>::WIDTH.
@@ -346,6 +365,8 @@ where
         .into_par_iter()
         .step_by(PackedVal::<SC>::WIDTH)
         .flat_map_iter(|i_start| {
+            let wrap = |i| i % quotient_size;
+
             let i_range = i_start..i_start + PackedVal::<SC>::WIDTH;
 
             let is_first_row = *PackedVal::<SC>::from_slice(&sels.is_first_row[i_range.clone()]);
@@ -358,6 +379,32 @@ where
                 width,
             );
 
+            let perm_local: Vec<_> = (0..perm_width)
+                .step_by(ext_degree)
+                .map(|col| {
+                    PackedChallenge::<SC>::from_basis_coefficients_fn(|i| {
+                        PackedVal::<SC>::from_fn(|offset| {
+                            permutation_trace_on_quotient_domain
+                                .get(wrap(i_start + offset), col + i)
+                                .unwrap()
+                        })
+                    })
+                })
+                .collect();
+
+            let perm_next: Vec<_> = (0..perm_width)
+                .step_by(ext_degree)
+                .map(|col| {
+                    PackedChallenge::<SC>::from_basis_coefficients_fn(|i| {
+                        PackedVal::<SC>::from_fn(|offset| {
+                            permutation_trace_on_quotient_domain
+                                .get(wrap(i_start + next_step + offset), col + i)
+                                .unwrap()
+                        })
+                    })
+                })
+                .collect();
+
             let accumulator = PackedChallenge::<SC>::ZERO;
             let mut folder = ProverConstraintFolder {
                 main: main.as_view(),
@@ -369,8 +416,11 @@ where
                 decomposed_alpha_powers: &decomposed_alpha_powers,
                 accumulator,
                 constraint_index: 0,
-                perm: todo!(),
-                perm_challenges: todo!(),
+                perm: VerticalPair::new(
+                    RowMajorMatrixView::new_row(&perm_local),
+                    RowMajorMatrixView::new_row(&perm_next),
+                ),
+                perm_challenges,
             };
             air.eval(&mut folder);
 

@@ -49,7 +49,7 @@ where
         trace_domain.create_disjoint_domain(1 << (degree_bits + log_quotient_degree));
     let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
 
-    let randomized_quotient_chunks_domains = quotient_chunks_domains
+    let trace_domains = quotient_chunks_domains
         .iter()
         .map(|domain| pcs.natural_domain_for_degree(domain.size() << (config.is_zk())))
         .collect_vec();
@@ -97,15 +97,15 @@ where
 
     challenger.observe(commitments.permutation_trace.clone());
 
+    let perm_challenges = (0..2)
+        .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
+        .collect::<Vec<SC::Challenge>>();
+
     // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
     // into a single polynomial.
     //
     // Soundness Error: n/|EF| where n is the number of constraints.
     let alpha: SC::Challenge = challenger.sample_algebra_element();
-
-    let perm_challenges = (0..2)
-        .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
-        .collect::<Vec<SC::Challenge>>();
 
     challenger.observe(commitments.quotient_chunks.clone());
 
@@ -149,12 +149,22 @@ where
             commitments.quotient_chunks.clone(),
             // Check the commitment on the randomized domains.
             zip_eq(
-                randomized_quotient_chunks_domains.iter(),
+                trace_domains.iter(),
                 &opened_values.quotient_chunks,
                 VerificationError::InvalidProofShape,
             )?
             .map(|(domain, values)| (*domain, vec![(zeta, values.clone())]))
             .collect_vec(),
+        ),
+        (
+            commitments.trace.clone(),
+            vec![(
+                trace_domain,
+                vec![
+                    (zeta, opened_values.permutation_trace_local.clone()),
+                    (zeta_next, opened_values.permutation_trace_next.clone()),
+                ],
+            )],
         ),
     ]);
 

@@ -276,10 +276,11 @@ where
         let round0 = opt_r_data.as_ref().map(|r_data| (r_data, vec![vec![zeta]]));
         let round1 = (&trace_data, vec![vec![zeta, zeta_next]]);
         let round2 = (&quotient_data, vec![vec![zeta]; quotient_degree]); // open every chunk at zeta
+        let round3 = (&permutation_data, vec![vec![zeta, zeta_next]]);
 
         let rounds = round0
             .into_iter()
-            .chain([round1, round2])
+            .chain([round1, round2, round3])
             .collect::<Vec<_>>();
 
         pcs.open(rounds, &mut challenger)
@@ -288,6 +289,8 @@ where
     let quotient_idx = <SC as StarkGenericConfig>::Pcs::QUOTIENT_IDX;
     let trace_local = opened_values[trace_idx][0][0].clone();
     let trace_next = opened_values[trace_idx][0][1].clone();
+    let permutation_trace_local = opened_values[trace_idx][2][0].clone();
+    let permutation_trace_next = opened_values[trace_idx][2][1].clone();
     let quotient_chunks = opened_values[quotient_idx]
         .iter()
         .map(|v| v[0].clone())
@@ -300,6 +303,8 @@ where
     let opened_values = OpenedValues {
         trace_local,
         trace_next,
+        permutation_trace_local,
+        permutation_trace_next,
         quotient_chunks,
         random,
     };

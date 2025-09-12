@@ -322,26 +322,19 @@ mod tests {
     }
 
     impl Air<SymbolicAirBuilder<BabyBear>> for RowLogicAir<2> {
-        fn eval(&self, _builder: &mut SymbolicAirBuilder<BabyBear>) {
-            unreachable!()
-        }
+        fn eval(&self, _builder: &mut SymbolicAirBuilder<BabyBear>) {}
     }
 
-    impl<'a, SC: StarkGenericConfig>
-        Air<crate::check_constraints::DebugConstraintBuilder<'a, Val<SC>>> for RowLogicAir<2>
-    {
+    impl<'a> Air<crate::check_constraints::DebugConstraintBuilder<'a, BabyBear>> for RowLogicAir<2> {
         fn eval(
             &self,
-            _builder: &mut crate::check_constraints::DebugConstraintBuilder<'a, Val<SC>>,
+            _builder: &mut crate::check_constraints::DebugConstraintBuilder<'a, BabyBear>,
         ) {
-            unreachable!()
         }
     }
 
     impl<'a, SC: StarkGenericConfig> Air<ProverConstraintFolder<'a, SC>> for RowLogicAir<2> {
-        fn eval(&self, _builder: &mut ProverConstraintFolder<'a, SC>) {
-            unreachable!()
-        }
+        fn eval(&self, _builder: &mut ProverConstraintFolder<'a, SC>) {}
     }
 
     // #[test]

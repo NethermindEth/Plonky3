@@ -8,6 +8,8 @@ use p3_field::extension::{BinomialExtensionField, ComplexExtendable};
 use p3_field::{ExtensionField, Field, PrimeField32, PrimeField64, TwoAdicField};
 use p3_fri::{TwoAdicFriPcs, create_benchmark_fri_config};
 use p3_keccak::{Keccak256Hash, KeccakF};
+use p3_matrix::Matrix;
+use p3_matrix::dense::RowMajorMatrix;
 use p3_mersenne_31::Mersenne31;
 use p3_symmetric::{CryptographicPermutation, PaddingFreeSponge, SerializingHasher};
 use p3_uni_stark::{Proof, StarkGenericConfig, prove, verify};
@@ -84,7 +86,18 @@ where
 
     let config = KeccakStarkConfig::new(pcs, challenger);
 
-    let proof = prove(&config, &proof_goal, trace.clone(), trace, &vec![]);
+    let permutation_trace = RowMajorMatrix::new(
+        trace.values.iter().map(|&x| x.into()).collect(),
+        trace.width(),
+    );
+
+    let proof = prove(
+        &config,
+        &proof_goal,
+        trace.clone(),
+        permutation_trace,
+        &vec![],
+    );
     report_proof_size(&proof);
 
     verify(&config, &proof_goal, &proof, &vec![])
@@ -126,7 +139,18 @@ where
 
     let config = Poseidon2StarkConfig::new(pcs, challenger);
 
-    let proof = prove(&config, &proof_goal, trace.clone(), trace, &vec![]);
+    let permutation_trace = RowMajorMatrix::new(
+        trace.values.iter().map(|&x| x.into()).collect(),
+        trace.width(),
+    );
+
+    let proof = prove(
+        &config,
+        &proof_goal,
+        trace.clone(),
+        permutation_trace,
+        &vec![],
+    );
     report_proof_size(&proof);
 
     verify(&config, &proof_goal, &proof, &vec![])
@@ -162,7 +186,18 @@ pub fn prove_m31_keccak<
 
     let config = KeccakCircleStarkConfig::new(pcs, challenger);
 
-    let proof = prove(&config, &proof_goal, trace.clone(), trace, &vec![]);
+    let permutation_trace = RowMajorMatrix::new(
+        trace.values.iter().map(|&x| x.into()).collect(),
+        trace.width(),
+    );
+
+    let proof = prove(
+        &config,
+        &proof_goal,
+        trace.clone(),
+        permutation_trace,
+        &vec![],
+    );
     report_proof_size(&proof);
 
     verify(&config, &proof_goal, &proof, &vec![])
@@ -202,7 +237,18 @@ where
 
     let config = Poseidon2CircleStarkConfig::new(pcs, challenger);
 
-    let proof = prove(&config, &proof_goal, trace.clone(), trace, &vec![]);
+    let permutation_trace = RowMajorMatrix::new(
+        trace.values.iter().map(|&x| x.into()).collect(),
+        trace.width(),
+    );
+
+    let proof = prove(
+        &config,
+        &proof_goal,
+        trace.clone(),
+        permutation_trace,
+        &vec![],
+    );
     report_proof_size(&proof);
 
     verify(&config, &proof_goal, &proof, &vec![])

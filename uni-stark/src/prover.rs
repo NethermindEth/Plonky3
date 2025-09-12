@@ -123,7 +123,7 @@ pub fn prove<
     config: &SC,
     air: &A,
     trace: RowMajorMatrix<Val<SC>>,
-    permutation_trace: RowMajorMatrix<Val<SC>>,
+    permutation_trace: RowMajorMatrix<SC::Challenge>,
     public_values: &Vec<Val<SC>>,
 ) -> Proof<SC>
 where

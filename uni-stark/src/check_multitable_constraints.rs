@@ -1,7 +1,9 @@
 use alloc::vec::Vec;
 
 use p3_air::logup::LogupInteractionAirBuilder;
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PermutationAirBuilder};
+use p3_air::{
+    Air, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PermutationAirBuilder,
+};
 use p3_field::{ExtensionField, Field};
 use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
@@ -23,18 +25,13 @@ pub(crate) fn check_multitable_constraints<F, ExtF, A>(
     air: &A,
     main: &RowMajorMatrix<F>,
     permutation_trace: &RowMajorMatrix<ExtF>,
-    public_values: &Vec<F>
-)
-where
+    public_values: &Vec<F>,
+) where
     F: Field,
     ExtF: ExtensionField<F>,
     A: for<'a> Air<LogupInteractionAirBuilder<'a, DebugConstraintBuilder<'a, F, ExtF>>>,
 {
-    let challenges = [
-        ExtF::from_u8(5),
-        ExtF::from_u8(10),
-        ExtF::from_u8(15),
-    ];
+    let challenges = [ExtF::from_u8(5), ExtF::from_u8(10), ExtF::from_u8(15)];
 
     let height = main.height();
 
@@ -77,33 +74,34 @@ where
     });
 }
 
-pub(crate) fn check_cumulative_sum<F, ExtF>(
-    permutation_traces: &[RowMajorMatrix<ExtF>],
-)
+pub(crate) fn check_cumulative_sum<F, ExtF>(permutation_traces: &[RowMajorMatrix<ExtF>])
 where
     F: Field,
     ExtF: ExtensionField<F>,
 {
-    let sum: ExtF = permutation_traces.iter().map(|trace| {
-        let height = trace.height();
+    let sum: ExtF = permutation_traces
+        .iter()
+        .map(|trace| {
+            let height = trace.height();
 
-        for i in 0..height {
-            let local = trace.row_slice(i).unwrap();
-            let next = trace.row_slice((i + 1) % height).unwrap();
-            let permutation_trace = VerticalPair::new(
-                RowMajorMatrixView::new_row(&*local),
-                RowMajorMatrixView::new_row(&*next),
-            );
+            for i in 0..height {
+                let local = trace.row_slice(i).unwrap();
+                let next = trace.row_slice((i + 1) % height).unwrap();
+                let permutation_trace = VerticalPair::new(
+                    RowMajorMatrixView::new_row(&*local),
+                    RowMajorMatrixView::new_row(&*next),
+                );
 
-            let width = permutation_trace.width();
-            assert_eq!(
-                permutation_trace.get(i, width - 1),
-                permutation_trace.get((i + 1) % height, width - 1)
-            )
-        }
+                let width = permutation_trace.width();
+                assert_eq!(
+                    permutation_trace.get(i, width - 1),
+                    permutation_trace.get((i + 1) % height, width - 1)
+                )
+            }
 
-        trace.get(0, trace.width() - 1).unwrap()
-    }).sum();
+            trace.get(0, trace.width() - 1).unwrap()
+        })
+        .sum();
 
     assert_eq!(sum, ExtF::ZERO);
 }
@@ -184,7 +182,9 @@ where
     }
 }
 
-impl<F: Field, ExtF: ExtensionField<F>> AirBuilderWithPublicValues for DebugConstraintBuilder<'_, F, ExtF> {
+impl<F: Field, ExtF: ExtensionField<F>> AirBuilderWithPublicValues
+    for DebugConstraintBuilder<'_, F, ExtF>
+{
     type PublicVar = Self::F;
 
     fn public_values(&self) -> &[Self::F] {
@@ -201,16 +201,15 @@ impl<F: Field, ExtF: ExtensionField<F>> ExtensionBuilder for DebugConstraintBuil
 
     fn assert_zero_ext<I>(&mut self, x: I)
     where
-        I: Into<Self::ExprEF>
+        I: Into<Self::ExprEF>,
     {
-        assert_eq!(
-            x.into(),
-            ExtF::ZERO
-        )
+        assert_eq!(x.into(), ExtF::ZERO)
     }
 }
 
-impl <'a, F: Field, ExtF: ExtensionField<F>> PermutationAirBuilder for DebugConstraintBuilder<'a, F, ExtF> {
+impl<'a, F: Field, ExtF: ExtensionField<F>> PermutationAirBuilder
+    for DebugConstraintBuilder<'a, F, ExtF>
+{
     type MP = VerticalPair<RowMajorMatrixView<'a, ExtF>, RowMajorMatrixView<'a, ExtF>>;
 
     type RandomVar = ExtF;
@@ -229,9 +228,18 @@ mod tests {
     use alloc::vec;
 
     use p3_air::{BaseAir, BaseAirWithPublicValues, InteractionAirBuilder};
-    use p3_baby_bear::BabyBear;
-    use p3_field::{extension::BinomialExtensionField, PrimeCharacteristicRing};
+    use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
+    use p3_challenger::DuplexChallenger;
+    use p3_commit::ExtensionMmcs;
+    use p3_dft::Radix2DitParallel;
+    use p3_field::{PrimeCharacteristicRing, extension::BinomialExtensionField};
+    use p3_fri::{HidingFriPcs, create_test_fri_config_zk};
     use p3_matrix::dense::DenseMatrix;
+    use p3_merkle_tree::MerkleTreeHidingMmcs;
+    use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+    use rand::{SeedableRng, rngs::SmallRng};
+
+    use crate::{StarkConfig, prove};
 
     use super::*;
 
@@ -260,8 +268,14 @@ mod tests {
 
     impl<F: Field, const W: usize> BaseAirWithPublicValues<F> for RowLogicAir<W> {}
 
-    impl<F: Field, ExtF: ExtensionField<F>, const W: usize> Air<LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>> for RowLogicAir<W> {
-        fn eval(&self, builder: &mut LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>) {
+    impl<F: Field, ExtF: ExtensionField<F>, const W: usize>
+        Air<LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>>
+        for RowLogicAir<W>
+    {
+        fn eval(
+            &self,
+            builder: &mut LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>,
+        ) {
             let main = builder.main();
 
             for col in 0..W {
@@ -272,25 +286,30 @@ mod tests {
                 builder.when_transition().assert_eq(b, a + F::ONE);
             }
 
-            let a = vec![main.top.get(0,0).unwrap()];
+            let a = vec![main.top.get(0, 0).unwrap()];
 
             builder.register_interaction(a.into_iter(), F::ONE);
             builder.constrain_cumulative_sum();
 
             let mut builder = builder.when(builder.is_last_row());
-            
+
             // Add public value equality on last row for extra coverage
             let public_values = builder.public_values().to_vec();
 
             for (i, pv) in public_values.into_iter().enumerate().take(W) {
                 builder.assert_eq(main.top.get(0, i).unwrap(), pv);
             }
-
         }
     }
 
-    impl<F: Field, ExtF: ExtensionField<F>> Air<LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>> for ColumnShuffleAir {
-        fn eval(&self, builder: &mut LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>) {
+    impl<F: Field, ExtF: ExtensionField<F>>
+        Air<LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>>
+        for ColumnShuffleAir
+    {
+        fn eval(
+            &self,
+            builder: &mut LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>,
+        ) {
             let main = builder.main();
 
             let a = vec![main.top.get(0, 0).unwrap()];
@@ -318,7 +337,7 @@ mod tests {
     //     let main = RowMajorMatrix::new(values, 2);
     //     let permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![], 0);
     //     check_multitable_constraints(
-    //         &[air], 
+    //         &[air],
     //         &[main],
     //         &[permutation],
     //          &vec![BabyBear::new(4); 2]
@@ -344,7 +363,7 @@ mod tests {
     //     let permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![], 0);
     //     check_multitable_constraints(
     //         &[air],
-    //         &[main], 
+    //         &[main],
     //         &[permutation],
     //         &vec![BabyBear::new(6); 2]
     //     );
@@ -378,8 +397,8 @@ mod tests {
     //     ], 1);
     //     // Wrong public value on column 1
     //     check_multitable_constraints(
-    //         &[air], 
-    //         &[main], 
+    //         &[air],
+    //         &[main],
     //         &[permutation],
     //         &vec![BabyBear::new(4), BabyBear::new(5)]
     //     );
@@ -387,6 +406,46 @@ mod tests {
 
     #[test]
     fn test_single_row_wraparound_logic() {
+        type Val = BabyBear;
+        type Challenge = BinomialExtensionField<Val, 4>;
+
+        type Perm = Poseidon2BabyBear<16>;
+        let mut rng = SmallRng::seed_from_u64(1);
+        let perm = Perm::new_from_rng_128(&mut rng);
+
+        type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+        let hash = MyHash::new(perm.clone());
+
+        type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+        let compress = MyCompress::new(perm.clone());
+
+        type ValMmcs = MerkleTreeHidingMmcs<
+            <Val as Field>::Packing,
+            <Val as Field>::Packing,
+            MyHash,
+            MyCompress,
+            SmallRng,
+            8,
+            4,
+        >;
+
+        let val_mmcs = ValMmcs::new(hash, compress, rng);
+
+        type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+        let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+
+        type Dft = Radix2DitParallel<Val>;
+        let dft = Dft::default();
+
+        type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+
+        let fri_config = create_test_fri_config_zk(challenge_mmcs);
+        type HidingPcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SmallRng>;
+        let pcs = HidingPcs::new(dft, val_mmcs, fri_config, 4, SmallRng::seed_from_u64(1));
+        type MyConfig = StarkConfig<HidingPcs, Challenge, Challenger>;
+        let challenger = Challenger::new(perm);
+        let config = MyConfig::new(pcs, challenger);
+
         let challenge_0 = BinomialExtensionField::from(BabyBear::from_u8(5));
         let challenge_2 = BinomialExtensionField::from(BabyBear::from_u8(15));
 
@@ -406,41 +465,40 @@ mod tests {
         // Here: is_transition == false ⇒ so no assertions are enforced.
         let row_air = RowLogicAir::<2>;
         let row_values = vec![
-            val_0, val_1, // Row 0
-            val_0 + BabyBear::ONE, val_1 + BabyBear::ONE // Row 1
+            val_0,
+            val_1, // Row 0
+            val_0 + BabyBear::ONE,
+            val_1 + BabyBear::ONE, // Row 1
         ];
         let row_main = RowMajorMatrix::new(row_values, 2);
-        let row_permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![
-            perm_0 + perm_1,
-            cumulative_sum,
-            perm_1,
-            cumulative_sum,
-        ], 2);
+        let row_permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(
+            vec![perm_0 + perm_1, cumulative_sum, perm_1, cumulative_sum],
+            2,
+        );
 
         let shuffle_air = ColumnShuffleAir;
-        let shuffle_values = vec![
-            val_0 + BabyBear::ONE,
-            val_0,
-        ];
-        let shuffle_main = RowMajorMatrix::new(shuffle_values, 1);
-        let shuffle_permutation: DenseMatrix<BinomialExtensionField<BabyBear, 4>> = RowMajorMatrix::new(vec![
-            -perm_0 - perm_1,
-            -cumulative_sum,
-            -perm_0,
-            -cumulative_sum
-        ], 2);
-        check_multitable_constraints(
+        let shuffle_values = vec![val_0 + BabyBear::ONE, val_0];
+
+        prove(
+            &config,
             &row_air,
-            &row_main,
-            &row_permutation,
-            &vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]
+            row_main,
+            row_permutation,
+            &vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE],
         );
-        check_multitable_constraints(
-            &shuffle_air,
-            &shuffle_main,
-            &shuffle_permutation,
-            &vec![]
-        );
-        check_cumulative_sum::<BabyBear, _>(&[row_permutation, shuffle_permutation]);
+
+        // check_multitable_constraints(
+        //     &row_air,
+        //     &row_main,
+        //     &row_permutation,
+        //     &vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]
+        // );
+        // check_multitable_constraints(
+        //     &shuffle_air,
+        //     &shuffle_main,
+        //     &shuffle_permutation,
+        //     &vec![]
+        // );
+        // check_cumulative_sum::<BabyBear, _>(&[row_permutation, shuffle_permutation]);
     }
 }

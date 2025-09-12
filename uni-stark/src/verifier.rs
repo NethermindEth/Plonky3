@@ -212,6 +212,11 @@ where
         RowMajorMatrixView::new_row(&opened_values.trace_next),
     );
 
+    let perm = VerticalPair::new(
+        RowMajorMatrixView::new_row(&opened_values.permutation_trace_local),
+        RowMajorMatrixView::new_row(&opened_values.permutation_trace_next),
+    );
+
     let mut folder = VerifierConstraintFolder {
         main,
         public_values,
@@ -220,8 +225,8 @@ where
         is_transition: sels.is_transition,
         alpha,
         accumulator: SC::Challenge::ZERO,
-        perm: todo!(),
-        perm_challenges: todo!(),
+        perm,
+        perm_challenges: &perm_challenges,
     };
     air.eval(&mut folder);
     let folded_constraints = folder.accumulator;

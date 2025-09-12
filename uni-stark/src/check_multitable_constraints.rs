@@ -239,7 +239,9 @@ mod tests {
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
     use rand::{SeedableRng, rngs::SmallRng};
 
-    use crate::{StarkConfig, prove};
+    use crate::{
+        ProverConstraintFolder, StarkConfig, StarkGenericConfig, SymbolicAirBuilder, Val, prove,
+    };
 
     use super::*;
 
@@ -316,6 +318,29 @@ mod tests {
 
             builder.register_interaction(a.into_iter(), -F::ONE);
             builder.constrain_cumulative_sum();
+        }
+    }
+
+    impl Air<SymbolicAirBuilder<BabyBear>> for RowLogicAir<2> {
+        fn eval(&self, _builder: &mut SymbolicAirBuilder<BabyBear>) {
+            unreachable!()
+        }
+    }
+
+    impl<'a, SC: StarkGenericConfig>
+        Air<crate::check_constraints::DebugConstraintBuilder<'a, Val<SC>>> for RowLogicAir<2>
+    {
+        fn eval(
+            &self,
+            _builder: &mut crate::check_constraints::DebugConstraintBuilder<'a, Val<SC>>,
+        ) {
+            unreachable!()
+        }
+    }
+
+    impl<'a, SC: StarkGenericConfig> Air<ProverConstraintFolder<'a, SC>> for RowLogicAir<2> {
+        fn eval(&self, _builder: &mut ProverConstraintFolder<'a, SC>) {
+            unreachable!()
         }
     }
 
@@ -479,7 +504,7 @@ mod tests {
         let shuffle_air = ColumnShuffleAir;
         let shuffle_values = vec![val_0 + BabyBear::ONE, val_0];
 
-        prove(
+        prove::<MyConfig, RowLogicAir<2>>(
             &config,
             &row_air,
             row_main,

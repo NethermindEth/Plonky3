@@ -239,7 +239,7 @@ mod tests {
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
     use rand::{SeedableRng, rngs::SmallRng};
 
-    use crate::{ProverConstraintFolder, StarkConfig, StarkGenericConfig, Val, prove};
+    use crate::{LogupAir, ProverConstraintFolder, StarkConfig, StarkGenericConfig, Val, prove};
 
     use super::*;
 
@@ -288,7 +288,6 @@ mod tests {
             let a = vec![top.get(0).unwrap()];
 
             builder.register_interaction(a.into_iter().cloned(), PB::F::ONE);
-            builder.constrain_cumulative_sum();
 
             let mut builder = builder.when(builder.is_last_row());
 
@@ -314,7 +313,6 @@ mod tests {
             let a = vec![main.top.get(0, 0).unwrap()];
 
             builder.register_interaction(a.into_iter(), -F::ONE);
-            builder.constrain_cumulative_sum();
         }
     }
 
@@ -478,12 +476,12 @@ mod tests {
         let shuffle_air = ColumnShuffleAir;
         let shuffle_values = vec![val_0 + BabyBear::ONE, val_0];
 
-        prove::<MyConfig, RowLogicAir<2>>(
+        prove::<MyConfig>(
             &config,
-            &row_air,
-            row_main,
-            row_permutation,
-            &vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE],
+            &[Box::new(row_air)],
+            &[row_main],
+            &[row_permutation],
+            &[vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]],
         );
 
         // check_multitable_constraints(

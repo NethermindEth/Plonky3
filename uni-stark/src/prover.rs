@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use itertools::Itertools;
 use p3_air::logup::LogupInteractionAirBuilder;
-use p3_air::symbolic_builder::{SymbolicAirBuilder};
+use p3_air::symbolic_builder::SymbolicAirBuilder;
 use p3_air::symbolic_expression::SymbolicExpression;
 use p3_air::symbolic_variable::Entry;
 use p3_air::{Air, BaseAir, ExtensionBuilder};
@@ -118,38 +118,56 @@ where
 }
 
 //TODO finish blanket implementation
-pub trait QuotientAir<SC> : for<'a> Air<LogupInteractionAirBuilder<'a, ProverConstraintFolder<'a, SC>>>
-where SC: StarkGenericConfig
-{}
+pub trait QuotientAir<SC>:
+    for<'a> Air<LogupInteractionAirBuilder<'a, ProverConstraintFolder<'a, SC>>>
+where
+    SC: StarkGenericConfig,
+{
+}
 impl<T, SC> QuotientAir<SC> for T
 where
-    T : for<'a> Air<LogupInteractionAirBuilder<'a, ProverConstraintFolder<'a, SC>>>,
-    SC: StarkGenericConfig
-{}
-pub trait VerifiableLogupAir<SC> : for<'a> Air<LogupInteractionAirBuilder<'a, VerifierConstraintFolder<'a, SC>>>
-where SC: StarkGenericConfig
-{}
+    T: for<'a> Air<LogupInteractionAirBuilder<'a, ProverConstraintFolder<'a, SC>>>,
+    SC: StarkGenericConfig,
+{
+}
+pub trait VerifiableLogupAir<SC>:
+    for<'a> Air<LogupInteractionAirBuilder<'a, VerifierConstraintFolder<'a, SC>>>
+where
+    SC: StarkGenericConfig,
+{
+}
 impl<T, SC> VerifiableLogupAir<SC> for T
 where
-    T : for<'a> Air<LogupInteractionAirBuilder<'a, VerifierConstraintFolder<'a, SC>>>,
-    SC: StarkGenericConfig
-{}
-pub trait LogupAir<SC> : Air<SymbolicAirBuilder<
-    Val<SC>,
-    <SC as StarkGenericConfig>::Challenge,
-    <SC as StarkGenericConfig>::Challenge
->> + QuotientAir<SC> + VerifiableLogupAir<SC>
-where SC: StarkGenericConfig
-{}
-impl<T, SC> LogupAir<SC> for T
-where
-    T : Air<SymbolicAirBuilder<
+    T: for<'a> Air<LogupInteractionAirBuilder<'a, VerifierConstraintFolder<'a, SC>>>,
+    SC: StarkGenericConfig,
+{
+}
+pub trait LogupAir<SC>:
+    Air<
+        SymbolicAirBuilder<
             Val<SC>,
             <SC as StarkGenericConfig>::Challenge,
-            <SC as StarkGenericConfig>::Challenge
-        >> + QuotientAir<SC> + VerifiableLogupAir<SC>,
-    SC: StarkGenericConfig
-{}
+            <SC as StarkGenericConfig>::Challenge,
+        >,
+    > + QuotientAir<SC>
+    + VerifiableLogupAir<SC>
+where
+    SC: StarkGenericConfig,
+{
+}
+impl<T, SC> LogupAir<SC> for T
+where
+    T: Air<
+            SymbolicAirBuilder<
+                Val<SC>,
+                <SC as StarkGenericConfig>::Challenge,
+                <SC as StarkGenericConfig>::Challenge,
+            >,
+        > + QuotientAir<SC>
+        + VerifiableLogupAir<SC>,
+    SC: StarkGenericConfig,
+{
+}
 
 #[instrument(name = "infer log of constraint degree", skip_all)]
 pub fn get_log_quotient_degree<SC>(
@@ -159,7 +177,7 @@ pub fn get_log_quotient_degree<SC>(
     is_zk: usize,
 ) -> usize
 where
-    SC: StarkGenericConfig
+    SC: StarkGenericConfig,
 {
     assert!(is_zk <= 1, "is_zk must be either 0 or 1");
     // We pad to at least degree 2, since a quotient argument doesn't make sense with smaller degrees.
@@ -179,7 +197,7 @@ pub fn get_max_constraint_degree<SC>(
     num_public_values: usize,
 ) -> usize
 where
-    SC: StarkGenericConfig
+    SC: StarkGenericConfig,
 {
     get_symbolic_constraints(air, preprocessed_width, num_public_values)
         .iter()
@@ -195,18 +213,17 @@ pub fn get_symbolic_constraints<SC>(
     num_public_values: usize,
 ) -> Vec<SymbolicExpression<Val<SC>>>
 where
-    SC: StarkGenericConfig
+    SC: StarkGenericConfig,
 {
     let mut builder = SymbolicAirBuilder::new(
         preprocessed_width,
         <dyn LogupAir<SC> as BaseAir<Val<SC>>>::width(air.as_ref()),
         num_public_values,
-        0
+        0,
     );
     air.eval(&mut builder);
     builder.base_constraints().clone()
 }
-
 
 #[instrument(skip_all)]
 #[allow(clippy::multiple_bound_locations)] // cfg not supported in where clauses?
@@ -217,10 +234,10 @@ pub fn prove<
     // #[cfg(not(debug_assertions))] A,
 >(
     config: &SC,
-    airs: &Vec<Box<dyn LogupAir<SC>>>,
-    traces: Vec<RowMajorMatrix<Val<SC>>>,
-    permutation_traces: Vec<RowMajorMatrix<SC::Challenge>>,
-    public_values: &Vec<Vec<Val<SC>>>,
+    airs: &[Box<dyn LogupAir<SC>>],
+    traces: &[RowMajorMatrix<Val<SC>>],
+    permutation_traces: &[RowMajorMatrix<SC::Challenge>],
+    public_values: &[Vec<Val<SC>>],
 ) -> Vec<(Proof<SC>, <SC as StarkGenericConfig>::Challenge)>
 where
     SC: StarkGenericConfig,
@@ -233,17 +250,17 @@ where
         let trace = &traces[i];
         let permutation_trace = &permutation_traces[i];
         let public_values = &public_values[i];
-   
+
         // TODO put back in
         // #[cfg(debug_assertions)]
         // crate::check_constraints::check_constraints(air, &trace, public_values);
         //
         let pcs = config.pcs();
-    
+
         let degree = trace.height();
         let log_degree = log2_strict_usize(degree);
         let log_ext_degree = log_degree + config.is_zk();
-    
+
         let symbolic_constraints = get_symbolic_constraints(air, 0, public_values.len());
         for (idx, constraint) in symbolic_constraints.iter().enumerate() {
             println!(
@@ -259,31 +276,30 @@ where
             .unwrap_or(0);
         let log_quotient_degree = log2_ceil_usize(constraint_degree - 1 + config.is_zk());
         let quotient_degree = 1 << (log_quotient_degree + config.is_zk());
-    
+
         let mut challenger = config.initialise_challenger();
         let trace_domain = pcs.natural_domain_for_degree(degree);
         let ext_trace_domain = pcs.natural_domain_for_degree(degree * (config.is_zk() + 1));
-    
-        let (trace_commit, trace_data) =
-            info_span!("commit to trace data").in_scope(|| pcs.commit(
-                [(ext_trace_domain, trace.clone())]
-            ));
-    
+
+        let (trace_commit, trace_data) = info_span!("commit to trace data")
+            .in_scope(|| pcs.commit([(ext_trace_domain, trace.clone())]));
+
         // Observe the instance.
         // degree < 2^255 so we can safely cast log_degree to a u8.
         challenger.observe(Val::<SC>::from_u8(log_ext_degree as u8));
         challenger.observe(Val::<SC>::from_u8(log_degree as u8));
         // TODO: Might be best practice to include other instance data here; see verifier comment.
-    
+
         challenger.observe(trace_commit.clone());
         challenger.observe_slice(&public_values);
-    
+
         //TODO unshadow permutation_trace?
         let permutation_trace_flat = permutation_trace.clone().flatten_to_base();
-        let (permutation_commit, permutation_data) = pcs.commit([(trace_domain, permutation_trace_flat)]);
-    
+        let (permutation_commit, permutation_data) =
+            pcs.commit([(trace_domain, permutation_trace_flat)]);
+
         challenger.observe(permutation_commit.clone());
-    
+
         // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
         // into a single polynomial.
         //
@@ -305,18 +321,19 @@ where
         // confirm that satisfying it indeed proves what the prover claims. Hence this should not be
         // a soundness issue.
         let alpha: SC::Challenge = challenger.sample_algebra_element();
-    
+
         let quotient_domain =
             ext_trace_domain.create_disjoint_domain(1 << (log_ext_degree + log_quotient_degree));
-    
-        let trace_on_quotient_domain = pcs.get_evaluations_on_domain(&trace_data, 0, quotient_domain);
+
+        let trace_on_quotient_domain =
+            pcs.get_evaluations_on_domain(&trace_data, 0, quotient_domain);
         let permutation_trace_on_quotient_domain =
             pcs.get_evaluations_on_domain(&permutation_data, 0, quotient_domain);
-    
+
         let perm_challenges = (0..2)
             .map(|_| challenger.sample_algebra_element::<SC::Challenge>().into())
             .collect::<Vec<PackedChallenge<SC>>>();
-    
+
         let (quotient_values, num_interactions) = quotient_values(
             air,
             &public_values,
@@ -331,19 +348,23 @@ where
 
         let cumulative_sum: <SC as StarkGenericConfig>::Challenge = (0..num_interactions)
             .map(|i| {
-                permutation_trace.get(0, i).expect("Permutation trace is not wide enough for number of interactions")
+                permutation_trace
+                    .get(0, i)
+                    .expect("Permutation trace is not wide enough for number of interactions")
             })
             .sum();
-        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(vec![cumulative_sum]));
-    
+        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
+            vec![cumulative_sum],
+        ));
+
         let quotient_flat = RowMajorMatrix::new_col(quotient_values).flatten_to_base();
         let quotient_chunks = quotient_domain.split_evals(quotient_degree, quotient_flat);
         let qc_domains = quotient_domain.split_domains(quotient_degree);
-    
+
         let (quotient_commit, quotient_data) = info_span!("commit to quotient poly chunks")
             .in_scope(|| pcs.commit_quotient(qc_domains, quotient_chunks));
         challenger.observe(quotient_commit.clone());
-    
+
         // If zk is enabled, we generate random extension field values of the size of the randomized trace. If `n` is the degree of the initial trace,
         // then the randomized trace has degree `2n`. To randomize the FRI batch polynomial, we then need an extension field random polynomial of degree `2n -1`.
         // So we can generate a random polynomial  of degree `2n`, and provide it to `open` as is.
@@ -360,18 +381,18 @@ where
         } else {
             (None, None)
         };
-    
+
         let commitments = Commitments {
             trace: trace_commit,
             permutation_trace: permutation_commit,
             quotient_chunks: quotient_commit,
             random: opt_r_commit.clone(),
         };
-    
+
         if let Some(r_commit) = opt_r_commit {
             challenger.observe(r_commit);
         }
-    
+
         // Get an out-of-domain point to open our values at.
         //
         // Soundness Error:
@@ -385,19 +406,19 @@ where
         // cases but it is a completeness issue and contributes a completeness error of |gK| = 2N/|EF|.
         let zeta: SC::Challenge = challenger.sample_algebra_element();
         let zeta_next = trace_domain.next_point(zeta).unwrap();
-    
+
         let is_random = opt_r_data.is_some();
         let (opened_values, opening_proof) = info_span!("open").in_scope(|| {
             let round0 = opt_r_data.as_ref().map(|r_data| (r_data, vec![vec![zeta]]));
             let round1 = (&trace_data, vec![vec![zeta, zeta_next]]);
             let round2 = (&quotient_data, vec![vec![zeta]; quotient_degree]); // open every chunk at zeta
             let round3 = (&permutation_data, vec![vec![zeta, zeta_next]]);
-    
+
             let rounds = round0
                 .into_iter()
                 .chain([round1, round2, round3])
                 .collect::<Vec<_>>();
-    
+
             pcs.open(rounds, &mut challenger)
         });
         let trace_idx = <SC as StarkGenericConfig>::Pcs::TRACE_IDX;
@@ -423,12 +444,15 @@ where
             quotient_chunks,
             random,
         };
-        proofs.push((Proof {
-            commitments,
-            opened_values,
-            opening_proof,
-            degree_bits: log_ext_degree,
-        }, cumulative_sum));
+        proofs.push((
+            Proof {
+                commitments,
+                opened_values,
+                opening_proof,
+                degree_bits: log_ext_degree,
+            },
+            cumulative_sum,
+        ));
     }
 
     proofs
@@ -553,11 +577,17 @@ where
             let quotient = folder.inner.accumulator * inv_vanishing;
 
             // "Transpose" D packed base coefficients into WIDTH scalar extension coefficients.
-            ((0..core::cmp::min(quotient_size, PackedVal::<SC>::WIDTH)).map(move |idx_in_packing| {
-                SC::Challenge::from_basis_coefficients_fn(|coeff_idx| {
-                    quotient.as_basis_coefficients_slice()[coeff_idx].as_slice()[idx_in_packing]
-                })
-            }), num_interactions)
+            (
+                (0..core::cmp::min(quotient_size, PackedVal::<SC>::WIDTH)).map(
+                    move |idx_in_packing| {
+                        SC::Challenge::from_basis_coefficients_fn(|coeff_idx| {
+                            quotient.as_basis_coefficients_slice()[coeff_idx].as_slice()
+                                [idx_in_packing]
+                        })
+                    },
+                ),
+                num_interactions,
+            )
         })
         .collect();
 
@@ -576,7 +606,6 @@ where
         .collect_vec();
 
     (quotients, num_interactions)
-
 }
 
 // #[cfg(test)]
@@ -767,3 +796,4 @@ where
 //         );
 //     }
 // }
+

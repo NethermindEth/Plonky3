@@ -113,6 +113,10 @@ where
     }
 }
 
+//TODO finish blanket implementation
+trait LogupAir : Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>> {}
+impl<T: Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>> LogupAir for T {}
+
 #[instrument(skip_all)]
 #[allow(clippy::multiple_bound_locations)] // cfg not supported in where clauses?
 pub fn prove<
@@ -128,8 +132,14 @@ pub fn prove<
 ) -> Proof<SC>
 where
     SC: StarkGenericConfig,
-    A: Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>,
+    A: LogupAir,
 {
+    // get interaction count from LogupInteractionAirBuilder after eval is run on it
+    // sum the first interaction count elements of the first row of the permutation trace
+    // this is the cumulative sum for this air
+    // it must be obeserved by the challenger at some point, and then packaged into the proof
+
+
     // #[cfg(debug_assertions)]
     // crate::check_constraints::check_constraints(air, &trace, public_values);
     //
@@ -171,6 +181,7 @@ where
     challenger.observe(trace_commit.clone());
     challenger.observe_slice(public_values);
 
+    //TODO unshadow permutation_trace?
     let permutation_trace = permutation_trace.flatten_to_base();
     let (permutation_commit, permutation_data) = pcs.commit([(trace_domain, permutation_trace)]);
 

@@ -137,18 +137,19 @@ where
             })
             .join(", ");
 
+        println!("@[simp");
         println!("  def constrain_interactions {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) :=");
-        println!("    Circuit.buses c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])");
+        println!("    Circuit.bus c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])");
 
         println!("-----Constraint simplification------");
         let simplification_proof = [
             "apply Iff.intro",
             ". intro h",
-            "  simp [openvm_encapsulation, NAME_constraint_and_interaction_simplification] at h",
+            "  simp [plonky3_encapsulation, NAME_constraint_and_interaction_simplification] at h",
             "  simp only [NAME_constraint_and_interaction_simplification]",
             "  exact h",
             ". intro h",
-            "  simp [openvm_encapsulation, NAME_constraint_and_interaction_simplification]",
+            "  simp [plonky3_encapsulation, NAME_constraint_and_interaction_simplification]",
             "  simp only [NAME_constraint_and_interaction_simplification] at h",
             "  exact h",
         ].join("\n");
@@ -283,7 +284,7 @@ where
             "  unfold allHold allHold_simplified",
             "  apply Iff.and",
             "  . unfold NAME.extraction.constrain_interactions",
-            "    simp [openvm_encapsulation]",
+            "    simp [plonky3_encapsulation]",
             "    rfl",
             "  . simp only [extracted_row_constraint_list,",
             "              row_constraint_list,",

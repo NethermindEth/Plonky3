@@ -137,7 +137,7 @@ where
             })
             .join(", ");
 
-        println!("@[simp]");
+        println!("  @[simp]");
         println!("  def constrain_interactions {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) :=");
         println!("    Circuit.bus c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])");
 

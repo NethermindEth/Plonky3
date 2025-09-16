@@ -7,15 +7,23 @@ use crate::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, ExtensionB
 pub struct LogupInteractionAirBuilder<'inner, AB: PermutationAirBuilder>
 {
     pub inner: &'inner mut AB,
-    interaction_count: usize
+    interaction_count: usize,
 }
 
 impl <'inner, AB: PermutationAirBuilder> LogupInteractionAirBuilder<'inner, AB> {
-    pub fn new(inner: &'inner mut AB) -> Self {
+    pub fn new(
+        inner: &'inner mut AB,
+    ) -> Self {
         Self {
             inner,
-            interaction_count: 0
+            interaction_count: 0,
         }
+    }
+
+    pub fn get_interaction_count(
+        &self
+    ) -> usize {
+        self.interaction_count
     }
 }
 

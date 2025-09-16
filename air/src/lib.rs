@@ -7,6 +7,9 @@ extern crate alloc;
 
 mod air;
 pub mod logup;
+pub mod symbolic_builder;
+pub mod symbolic_expression;
+pub mod symbolic_variable;
 pub mod utils;
 mod virtual_column;
 

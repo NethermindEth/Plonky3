@@ -239,9 +239,7 @@ mod tests {
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
     use rand::{SeedableRng, rngs::SmallRng};
 
-    use crate::{
-        ProverConstraintFolder, StarkConfig, StarkGenericConfig, SymbolicAirBuilder, Val, prove,
-    };
+    use crate::{ProverConstraintFolder, StarkConfig, StarkGenericConfig, Val, prove};
 
     use super::*;
 
@@ -270,27 +268,21 @@ mod tests {
 
     impl<F: Field, const W: usize> BaseAirWithPublicValues<F> for RowLogicAir<W> {}
 
-    impl<F: Field, ExtF: ExtensionField<F>, const W: usize>
-        Air<LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>>
-        for RowLogicAir<W>
-    {
-        fn eval(
-            &self,
-            builder: &mut LogupInteractionAirBuilder<'_, DebugConstraintBuilder<'_, F, ExtF>>,
-        ) {
+    impl<PB: InteractionAirBuilder, const W: usize> Air<PB> for RowLogicAir<W> {
+        fn eval(&self, builder: &mut PB) {
             let main = builder.main();
 
             for col in 0..W {
-                let a = main.top.get(0, col).unwrap();
-                let b = main.bottom.get(0, col).unwrap();
+                let a = main.get(0, col).unwrap();
+                let b = main.get(1, col).unwrap();
 
                 // New logic: enforce row[i+1] = row[i] + 1, only on transitions
-                builder.when_transition().assert_eq(b, a + F::ONE);
+                builder.when_transition().assert_eq(b, a + PB::F::ONE);
             }
 
-            let a = vec![main.top.get(0, 0).unwrap()];
+            let a = vec![main.get(0, 0).unwrap()];
 
-            builder.register_interaction(a.into_iter(), F::ONE);
+            builder.register_interaction(a.into_iter(), PB::F::ONE);
             builder.constrain_cumulative_sum();
 
             let mut builder = builder.when(builder.is_last_row());
@@ -319,22 +311,6 @@ mod tests {
             builder.register_interaction(a.into_iter(), -F::ONE);
             builder.constrain_cumulative_sum();
         }
-    }
-
-    impl Air<SymbolicAirBuilder<BabyBear>> for RowLogicAir<2> {
-        fn eval(&self, _builder: &mut SymbolicAirBuilder<BabyBear>) {}
-    }
-
-    impl<'a> Air<crate::check_constraints::DebugConstraintBuilder<'a, BabyBear>> for RowLogicAir<2> {
-        fn eval(
-            &self,
-            _builder: &mut crate::check_constraints::DebugConstraintBuilder<'a, BabyBear>,
-        ) {
-        }
-    }
-
-    impl<'a, SC: StarkGenericConfig> Air<ProverConstraintFolder<'a, SC>> for RowLogicAir<2> {
-        fn eval(&self, _builder: &mut ProverConstraintFolder<'a, SC>) {}
     }
 
     // #[test]

@@ -273,16 +273,16 @@ mod tests {
             let main = builder.main();
 
             for col in 0..W {
-                let a = main.get(0, col).unwrap();
-                let b = main.get(1, col).unwrap();
+                let a = main.top.get(0, col).unwrap();
+                let b = main.bottom.get(0, col).unwrap();
 
                 // New logic: enforce row[i+1] = row[i] + 1, only on transitions
-                builder.when_transition().assert_eq(b, a + PB::F::ONE);
+                builder.when_transition().assert_eq(b, a + F::ONE);
             }
 
-            let a = vec![main.get(0, 0).unwrap()];
+            let a = vec![main.top.get(0, 0).unwrap()];
 
-            builder.register_interaction(a.into_iter(), PB::F::ONE);
+            builder.register_interaction(a.into_iter(), F::ONE);
             builder.constrain_cumulative_sum();
 
             let mut builder = builder.when(builder.is_last_row());

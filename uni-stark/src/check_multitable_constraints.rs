@@ -268,21 +268,26 @@ mod tests {
 
     impl<F: Field, const W: usize> BaseAirWithPublicValues<F> for RowLogicAir<W> {}
 
-    impl<PB: InteractionAirBuilder, const W: usize> Air<PB> for RowLogicAir<W> {
+    impl<PB: InteractionAirBuilder + AirBuilderWithPublicValues, const W: usize> Air<PB>
+        for RowLogicAir<W>
+    {
         fn eval(&self, builder: &mut PB) {
             let main = builder.main();
 
+            let top = main.row_slice(0).unwrap();
+            let bottom = main.row_slice(1).unwrap();
+
             for col in 0..W {
-                let a = main.top.get(0, col).unwrap();
-                let b = main.bottom.get(0, col).unwrap();
+                let a = *top.get(col).unwrap();
+                let b = *bottom.get(col).unwrap();
 
                 // New logic: enforce row[i+1] = row[i] + 1, only on transitions
-                builder.when_transition().assert_eq(b, a + F::ONE);
+                builder.when_transition().assert_eq(b, a + PB::F::ONE);
             }
 
-            let a = vec![main.top.get(0, 0).unwrap()];
+            let a = vec![top.get(0).unwrap()];
 
-            builder.register_interaction(a.into_iter(), F::ONE);
+            builder.register_interaction(a.into_iter().cloned(), PB::F::ONE);
             builder.constrain_cumulative_sum();
 
             let mut builder = builder.when(builder.is_last_row());
@@ -291,7 +296,7 @@ mod tests {
             let public_values = builder.public_values().to_vec();
 
             for (i, pv) in public_values.into_iter().enumerate().take(W) {
-                builder.assert_eq(main.top.get(0, i).unwrap(), pv);
+                builder.assert_eq(*top.get(i).unwrap(), pv);
             }
         }
     }

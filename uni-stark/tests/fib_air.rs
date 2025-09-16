@@ -10,12 +10,12 @@ use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
 use p3_fri::{HidingFriPcs, TwoAdicFriPcs, create_test_fri_config};
 use p3_keccak::{Keccak256Hash, KeccakF};
 use p3_matrix::Matrix;
-use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::dense::{DenseMatrix, RowMajorMatrix};
 use p3_merkle_tree::{MerkleTreeHidingMmcs, MerkleTreeMmcs};
 use p3_symmetric::{
     CompressionFunctionFromHasher, PaddingFreeSponge, SerializingHasher, TruncatedPermutation,
 };
-use p3_uni_stark::{StarkConfig, prove, verify};
+use p3_uni_stark::{prove, verify, LogupAir, StarkConfig};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -136,8 +136,27 @@ fn test_public_value_impl(n: usize, x: u64, log_final_poly_len: usize) {
     let config = MyConfig::new(pcs, challenger);
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::from_u64(x)];
 
-    let proof = prove(&config, &FibonacciAir {}, trace, &pis);
-    verify(&config, &FibonacciAir {}, &proof, &pis).expect("verification failed");
+    let permutation_trace = DenseMatrix::new(vec![], 0);
+    let air_box: Box<dyn LogupAir<_>> = Box::new(FibonacciAir {});
+
+    let proofs = prove(
+        &config, 
+        &vec![air_box], 
+        vec![trace] ,
+        vec![permutation_trace],
+        &vec![pis]
+    );
+
+    let air_box: Box<dyn LogupAir<_>> = Box::new(FibonacciAir {});
+    let proof = &proofs[0].0;
+    let cumulative_sum = &proofs[0].1;
+    verify(
+        &config,
+        &vec![air_box], 
+        &vec![(&proofs[0]).0], 
+        &vec![(&proofs[0]).1],
+        &vec![pis]
+    ).expect("verification failed");
 }
 
 #[test]

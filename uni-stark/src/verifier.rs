@@ -19,8 +19,8 @@ use crate::{get_log_quotient_degree, LogupAir, PcsError, Proof, StarkGenericConf
 pub fn verify<SC>(
     config: &SC,
     airs: &Vec<Box<dyn LogupAir<SC>>>,
-    proofs: &Vec<Proof<SC>>,
-    cumulative_sums: &Vec<<SC as StarkGenericConfig>::Challenge>,
+    proofs: &[Proof<SC>],
+    cumulative_sums: &[<SC as StarkGenericConfig>::Challenge],
     public_values: &Vec<Vec<Val<SC>>>,
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where

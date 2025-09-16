@@ -205,97 +205,71 @@ impl<F: Field, T: Into<Self>> Product<T> for SymbolicExpression<F> {
 
 // impl <F: Field, EF: ExtensionField<F>> Algebra<SymbolicExpression<F>> for SymbolicExpression<EF> {}
 
-#[derive(PartialEq)]
-enum Loc {
-    MulLhs,
-    MulRhs,
-    AddLhs,
-    AddRhs,
-    SubLhs,
-    SubRhs,
-    Neg,
-    Top
-}
-
-pub fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, scope_name: Option<String>) -> String
-where F : fmt::Display
-{
-    match scope_name {
-        Some(name) => symbolic_expression_to_string_impl(expression, &format!("{name}."), Loc::Top),
-        None => todo!(),
-    }
-    
-}
-
-fn symbolic_expression_to_string_impl<F>(expression: &SymbolicExpression<F>, scoping: &str, loc: Loc) -> String
-    where F : fmt::Display
-{
-    match expression {
+pub fn symbolic_expression_to_string<F: Field>(x: &SymbolicExpression<F>, scoping: &str, characteristic: Option<u32>) -> String {
+    match x {
         SymbolicExpression::Variable(symbolic_variable) =>
             format!(
                 "{scoping}{}",
                 match symbolic_variable.entry {
-                    Entry::Preprocessed { offset } => format!("Preprocessed[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Main { offset } => format!("Main[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Permutation { offset } => format!("Permutation[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Public => format!("Public[{}]", symbolic_variable.index),
-                    Entry::Challenge => format!("Challenge[{}]", symbolic_variable.index),
+                    Entry::Preprocessed{offset}=>format!("(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Main{offset}=>format!("(Circuit.main c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Permutation{offset}=>format!("(Circuit.permutation c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Public=>format!("(Circuit.public c (index := {}))",symbolic_variable.index),
+                    Entry::Challenge=>format!("(Circuit.challenge c (index := {}))",symbolic_variable.index),
                 },
                 
             ),
-        SymbolicExpression::IsFirstRow => format!("{scoping}IsFirstRow(row)"),
-        SymbolicExpression::IsLastRow => format!("{scoping}IsLastRow(row)"),
-        SymbolicExpression::IsTransition => format!("{scoping}IsTransition(row)"),
-        SymbolicExpression::Constant(x) => format!("{x}"),
-        SymbolicExpression::Add { x, y, degree_multiple: _ } => {
-            if loc == Loc::MulLhs || loc == Loc::MulRhs || loc == Loc::Neg {
-                format!(
-                    "({} + {})",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::AddLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::AddRhs),
-                )
-            } else if loc == Loc::SubRhs {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "{} + {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::AddLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::AddRhs),
-                )
+        SymbolicExpression::IsFirstRow => format!("(Circuit.isFirstRow c row)"),
+        SymbolicExpression::IsLastRow => format!("(Circuit.isLastRow c row)"),
+        SymbolicExpression::IsTransition => format!("(Circuit.isTransitionRow c row)"),
+        SymbolicExpression::Constant(x) => {
+            let num = str::parse::<u32>(&format!("{x}"));
+            match num {
+                Ok(num) => {
+                    match characteristic {
+                        Some(characteristic) => {
+                            if num >= characteristic {
+                                format!("{x}")
+                            } else if characteristic - num < num {
+                                format!("-{}", characteristic - num)
+                            } else {
+                                format!("{x}")
+                            }
+                        },
+                        None => format!("{x}"),
+                    }
+                },
+                Err(_) => format!("{x}"),
             }
-        }
-        SymbolicExpression::Sub { x, y, degree_multiple: _ } => {
-            if loc == Loc::AddLhs || loc == Loc::AddRhs || loc == Loc::Top {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "({} - {})",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            }
-        }
-        SymbolicExpression::Neg { x, degree_multiple: _ } => {
-            format!(
-                "-{}",
-                symbolic_expression_to_string_impl(x, scoping, Loc::Neg)
-            )
-        }
-        SymbolicExpression::Mul { x, y, degree_multiple: _ } => {
-            format!(
-                "{} * {}",
-                symbolic_expression_to_string_impl(x, scoping, Loc::MulLhs),
-                symbolic_expression_to_string_impl(y, scoping, Loc::MulRhs)
-            )
-        }
+        },
+        SymbolicExpression::Add { x, y, degree_multiple } => {
+            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
+            format!("({lhs} + {rhs})")
+        },
+        SymbolicExpression::Sub { x, y, degree_multiple } => {
+            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
+            format!("({lhs} - {rhs})")
+        },
+        SymbolicExpression::Neg { x, degree_multiple } => {
+            let leaf = symbolic_expression_to_string(&x, scoping, characteristic);
+            format!("-({leaf})")
+        },
+        SymbolicExpression::Mul { x, y, degree_multiple } => {
+            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
+            format!("({lhs} * {rhs})")
+        },
+    }
+}
+
+fn is_add_precedence<F>(x: &SymbolicExpression<F>) -> bool {
+    match x {
+        SymbolicExpression::Add { x, y, degree_multiple } => true,
+        SymbolicExpression::Sub { x, y, degree_multiple } => true,
+        SymbolicExpression::Neg { x, degree_multiple } => true,
+        _ => false,
     }
 }
 

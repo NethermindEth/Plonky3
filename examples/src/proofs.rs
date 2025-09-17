@@ -93,7 +93,7 @@ where
 
     let proof = prove(
         &config,
-        &proof_goal,
+        &[Box::new(proof_goal)],
         trace.clone(),
         permutation_trace,
         &vec![],

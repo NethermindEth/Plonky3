@@ -233,7 +233,7 @@ mod tests {
     use p3_commit::ExtensionMmcs;
     use p3_dft::Radix2DitParallel;
     use p3_field::{PrimeCharacteristicRing, extension::BinomialExtensionField};
-    use p3_fri::{HidingFriPcs, create_test_fri_config_zk};
+    use p3_fri::{HidingFriPcs, create_test_fri_params};
     use p3_matrix::dense::DenseMatrix;
     use p3_merkle_tree::MerkleTreeHidingMmcs;
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
@@ -270,6 +270,9 @@ mod tests {
 
     impl<PB: InteractionAirBuilder + AirBuilderWithPublicValues, const W: usize> Air<PB>
         for RowLogicAir<W>
+    where
+        PB::F: Field,
+        PB::Var: Copy,
     {
         fn eval(&self, builder: &mut PB) {
             let main = builder.main();
@@ -442,7 +445,7 @@ mod tests {
 
         type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
 
-        let fri_config = create_test_fri_config_zk(challenge_mmcs);
+        let fri_config = create_test_fri_params(challenge_mmcs, 0);
         type HidingPcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SmallRng>;
         let pcs = HidingPcs::new(dft, val_mmcs, fri_config, 4, SmallRng::seed_from_u64(1));
         type MyConfig = StarkConfig<HidingPcs, Challenge, Challenger>;

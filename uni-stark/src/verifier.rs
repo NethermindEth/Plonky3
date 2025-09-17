@@ -4,7 +4,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::{logup::LogupInteractionAirBuilder, Air, BaseAir};
+use p3_air::{Air, BaseAir, logup::LogupInteractionAirBuilder};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
@@ -13,22 +13,27 @@ use p3_matrix::stack::VerticalPair;
 use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
-use crate::{get_log_quotient_degree, LogupAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder};
+use crate::{
+    LogupAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder,
+    get_log_quotient_degree,
+};
 
 #[instrument(skip_all)]
 pub fn verify<SC>(
     config: &SC,
-    airs: &Vec<Box<dyn LogupAir<SC>>>,
-    proofs: &Vec<Proof<SC>>,
-    cumulative_sums: &Vec<<SC as StarkGenericConfig>::Challenge>,
-    public_values: &Vec<Vec<Val<SC>>>,
+    airs: &[Box<dyn LogupAir<SC>>],
+    proofs: &[Proof<SC>],
+    cumulative_sums: &[<SC as StarkGenericConfig>::Challenge],
+    public_values: &[Vec<Val<SC>>],
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
 {
     let sum = cumulative_sums
         .iter()
-        .fold(<SC as StarkGenericConfig>::Challenge::ZERO, |acc, x| acc + *x);
+        .fold(<SC as StarkGenericConfig>::Challenge::ZERO, |acc, x| {
+            acc + *x
+        });
 
     if sum != <SC as StarkGenericConfig>::Challenge::ZERO {
         return Err(VerificationError::LogupSumFailed);
@@ -45,27 +50,27 @@ where
             opening_proof,
             degree_bits,
         } = proof;
-    
+
         let pcs = config.pcs();
-    
+
         let degree = 1 << degree_bits;
         let log_quotient_degree =
             get_log_quotient_degree(air, 0, public_values.len(), config.is_zk());
         let quotient_degree = 1 << (log_quotient_degree + config.is_zk());
-    
+
         let mut challenger = config.initialise_challenger();
         let trace_domain = pcs.natural_domain_for_degree(degree);
         let init_trace_domain = pcs.natural_domain_for_degree(degree >> (config.is_zk()));
-    
+
         let quotient_domain =
             trace_domain.create_disjoint_domain(1 << (degree_bits + log_quotient_degree));
         let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
-    
+
         let trace_domains = quotient_chunks_domains
             .iter()
             .map(|domain| pcs.natural_domain_for_degree(domain.size() << (config.is_zk())))
             .collect_vec();
-    
+
         // Check that the random commitments are/are not present depending on the ZK setting.
         if SC::Pcs::ZK {
             // If ZK is enabled, the prover should have random commitments.
@@ -76,7 +81,7 @@ where
         } else if opened_values.random.is_some() || commitments.random.is_some() {
             return Err(VerificationError::RandomizationError);
         }
-    
+
         let air_width = <dyn LogupAir<SC> as BaseAir<Val<SC>>>::width(air.as_ref());
         let valid_shape = opened_values.trace_local.len() == air_width
             && opened_values.trace_next.len() == air_width
@@ -94,7 +99,7 @@ where
         if !valid_shape {
             return Err(VerificationError::InvalidProofShape);
         }
-    
+
         // Observe the instance.
         challenger.observe(Val::<SC>::from_usize(proof.degree_bits));
         challenger.observe(Val::<SC>::from_usize(proof.degree_bits - config.is_zk()));
@@ -103,38 +108,40 @@ where
         // Practically speaking though, the only related known attack is from failing to include public
         // values. It's not clear if failing to include other instance data could enable a transcript
         // collision, since most such changes would completely change the set of satisfying witnesses.
-    
+
         challenger.observe(commitments.trace.clone());
         challenger.observe_slice(public_values);
-    
+
         challenger.observe(commitments.permutation_trace.clone());
-    
+
         let perm_challenges = (0..2)
             .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
             .collect::<Vec<SC::Challenge>>();
-    
+
         // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
         // into a single polynomial.
         //
         // Soundness Error: n/|EF| where n is the number of constraints.
         let alpha: SC::Challenge = challenger.sample_algebra_element();
-    
-        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(vec![cumulative_sum]));
+
+        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
+            vec![cumulative_sum],
+        ));
 
         challenger.observe(commitments.quotient_chunks.clone());
-    
+
         // We've already checked that commitments.random is present if and only if ZK is enabled.
         // Observe the random commitment if it is present.
         if let Some(r_commit) = commitments.random.clone() {
             challenger.observe(r_commit);
         }
-    
+
         // Get an out-of-domain point to open our values at.
         //
         // Soundness Error: dN/|EF| where `N` is the trace length and our constraint polynomial has degree `d`.
         let zeta: SC::Challenge = challenger.sample_algebra_element();
         let zeta_next = init_trace_domain.next_point(zeta).unwrap();
-    
+
         // We've already checked that commitments.random and opened_values.random are present if and only if ZK is enabled.
         let mut coms_to_verify = if let Some(random_commit) = &commitments.random {
             let random_values = opened_values
@@ -181,10 +188,10 @@ where
                 )],
             ),
         ]);
-    
+
         pcs.verify(coms_to_verify, opening_proof, &mut challenger)
             .map_err(VerificationError::InvalidOpeningArgument)?;
-    
+
         let zps = quotient_chunks_domains
             .iter()
             .enumerate()
@@ -202,7 +209,7 @@ where
                     .product::<SC::Challenge>()
             })
             .collect_vec();
-    
+
         let quotient = opened_values
             .quotient_chunks
             .iter()
@@ -218,19 +225,19 @@ where
                         .sum::<SC::Challenge>()
             })
             .sum::<SC::Challenge>();
-    
+
         let sels = init_trace_domain.selectors_at_point(zeta);
-    
+
         let main = VerticalPair::new(
             RowMajorMatrixView::new_row(&opened_values.trace_local),
             RowMajorMatrixView::new_row(&opened_values.trace_next),
         );
-    
+
         let perm = VerticalPair::new(
             RowMajorMatrixView::new_row(&opened_values.permutation_trace_local),
             RowMajorMatrixView::new_row(&opened_values.permutation_trace_next),
         );
-    
+
         let mut folder = VerifierConstraintFolder {
             main,
             public_values,
@@ -245,7 +252,7 @@ where
         let mut folder = LogupInteractionAirBuilder::new(&mut folder);
         air.eval(&mut folder);
         let folded_constraints = folder.inner.accumulator;
-    
+
         // Finally, check that
         //     folded_constraints(zeta) / Z_H(zeta) = quotient(zeta)
         if folded_constraints * sels.inv_vanishing != quotient {

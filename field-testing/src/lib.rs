@@ -6,17 +6,22 @@ extern crate alloc;
 
 pub mod bench_func;
 pub mod dft_testing;
+pub mod extension_testing;
 pub mod from_integer_tests;
 pub mod packedfield_testing;
 
 use alloc::vec::Vec;
 use core::array;
+use core::iter::successors;
 
 pub use bench_func::*;
 pub use dft_testing::*;
+pub use extension_testing::*;
 use num_bigint::BigUint;
+use p3_field::coset::TwoAdicMultiplicativeCoset;
 use p3_field::{
-    ExtensionField, Field, PrimeCharacteristicRing, PrimeField32, PrimeField64, TwoAdicField,
+    ExtensionField, Field, PackedValue, PrimeCharacteristicRing, PrimeField32, PrimeField64,
+    TwoAdicField,
 };
 use p3_util::iter_array_chunks_padded;
 pub use packedfield_testing::*;
@@ -46,6 +51,7 @@ where
         x.double(),
         "Error when comparing x.double() to x * 2"
     );
+    assert_eq!(x, x.halve() * R::TWO, "Error when testing halve.");
 
     // Check different representatives of Zero.
     for zero in zeros.iter().copied() {
@@ -223,7 +229,7 @@ where
     let x = rng.random::<F>();
     let y = rng.random::<F>();
     let z = rng.random::<F>();
-    assert_eq!(x, x.halve() * F::TWO);
+    assert_eq!(F::TWO.inverse(), F::ONE.halve());
     assert_eq!(x * x.inverse(), F::ONE);
     assert_eq!(x.inverse() * x, F::ONE);
     assert_eq!(x.square().inverse(), x.inverse().square());
@@ -246,14 +252,18 @@ where
             x.clone() * R::from_u128(1_u128 << i)
         );
     }
+    // Goldilocks behaviour changes at 96, 192 so we want to test larger numbers than that.
+    for i in 128..256 {
+        assert_eq!(x.clone().mul_2exp_u64(i), x.clone() * R::TWO.exp_u64(i));
+    }
 }
 
-pub fn test_div_2exp_u64<F: Field>()
+pub fn test_div_2exp_u64<R: PrimeCharacteristicRing + Eq>()
 where
-    StandardUniform: Distribution<F>,
+    StandardUniform: Distribution<R>,
 {
     let mut rng = SmallRng::seed_from_u64(1);
-    let x = rng.random::<F>();
+    let x = rng.random::<R>();
     assert_eq!(x.div_2exp_u64(0), x);
     assert_eq!(x.div_2exp_u64(1), x.halve());
     for i in 0..128 {
@@ -261,8 +271,39 @@ where
         assert_eq!(
             x.div_2exp_u64(i),
             // Best to invert in the prime subfield in case F is an extension field.
-            x * F::from_prime_subfield(F::PrimeSubfield::from_u128(1_u128 << i).inverse())
+            x.clone() * R::from_prime_subfield(R::PrimeSubfield::from_u128(1_u128 << i).inverse())
         );
+    }
+    // Goldilocks behaviour changes at 96, 192 so we want to test larger numbers than that.
+    for i in 128..256 {
+        assert_eq!(x.mul_2exp_u64(i).div_2exp_u64(i), x);
+        assert_eq!(
+            x.div_2exp_u64(i),
+            // Best to invert in the prime subfield in case F is an extension field.
+            x.clone() * R::from_prime_subfield(R::PrimeSubfield::TWO.inverse().exp_u64(i))
+        );
+    }
+}
+
+pub fn test_add_slice<F: Field>()
+where
+    StandardUniform: Distribution<F>,
+{
+    let mut rng = SmallRng::seed_from_u64(1);
+    let lengths = [
+        F::Packing::WIDTH - 1,
+        F::Packing::WIDTH,
+        (F::Packing::WIDTH - 1) + (F::Packing::WIDTH << 10),
+    ];
+    for len in lengths {
+        let mut slice_1: Vec<_> = (&mut rng).sample_iter(StandardUniform).take(len).collect();
+        let slice_1_copy = slice_1.clone();
+        let slice_2: Vec<_> = (&mut rng).sample_iter(StandardUniform).take(len).collect();
+
+        F::add_slices(&mut slice_1, &slice_2);
+        for i in 0..len {
+            assert_eq!(slice_1[i], slice_1_copy[i] + slice_2[i]);
+        }
     }
 }
 
@@ -511,6 +552,60 @@ pub fn test_binary_ops<R: PrimeCharacteristicRing + Eq + Copy>(
     );
 }
 
+/// Tests the optimized implementation of `powers.take(n).collect()`
+pub fn test_powers_collect<F: Field>() {
+    // Small using serial implementation
+    let small_powers_serial = [0, 1, 2, 3, 4, 15];
+    // Small using packed implementation
+    let small_powers_packed = [16, 17];
+    // Large powers of two
+    let powers_of_two = [5, 6, 7, 8, 9, 10, 13];
+
+    let num_powers_tests: Vec<usize> = small_powers_serial
+        .into_iter()
+        .chain(small_powers_packed)
+        .chain(powers_of_two.iter().flat_map(|exp| {
+            // Check boundaries at power of 2
+            let n = 1 << exp;
+            [n - 1, n, n + 1]
+        }))
+        .collect();
+
+    let base = F::TWO;
+    let shift = F::GENERATOR;
+
+    // Manual implementation of `Powers`
+    let expected_iter = successors(Some(shift), |prev| Some(*prev * base));
+
+    for num_powers in num_powers_tests {
+        let expected: Vec<_> = expected_iter.clone().take(num_powers).collect();
+        let actual = base.shifted_powers(shift).collect_n(num_powers);
+        assert_eq!(
+            expected, actual,
+            "Got different powers when taking {num_powers}"
+        );
+    }
+}
+
+/// A function which extends the `exp_u64` code to handle `BigUints`.
+///
+/// This solution is slow (particularly when dealing with extension fields
+/// which should really be making use of the frobenius map) but should be
+/// fast enough for testing purposes.
+pub(crate) fn exp_biguint<F: Field>(x: F, exponent: &BigUint) -> F {
+    let digits = exponent.to_u64_digits();
+    let size = digits.len();
+
+    let mut power = F::ONE;
+
+    let bases = (0..size).map(|i| x.exp_power_of_2(64 * i));
+    digits
+        .iter()
+        .zip(bases)
+        .for_each(|(digit, base)| power *= base.exp_u64(*digit));
+    power
+}
+
 /// Given a list of the factors of the multiplicative group of a field, check
 /// that the defined generator is actually a generator of that group.
 pub fn test_generator<F: Field>(multiplicative_group_factors: &[(BigUint, u32)]) {
@@ -536,20 +631,8 @@ pub fn test_generator<F: Field>(multiplicative_group_factors: &[(BigUint, u32)])
                 .enumerate()
                 .for_each(|(j, (factor, exponent))| {
                     let modified_exponent = if i == j { exponent - 1 } else { *exponent };
-                    let digits = factor.to_u64_digits();
-                    let size = digits.len();
                     for _ in 0..modified_exponent {
-                        // The main complication here is extending our `exp_u64` code to handle `BigUints`.
-                        // This solution is slow (particularly when dealing with extension fields
-                        // which should really be making use of the frobenius map) but should be
-                        // fast enough for testing purposes.
-                        let bases = (0..size).map(|i| generator_power.exp_power_of_2(64 * i));
-                        let mut power = F::ONE;
-                        digits
-                            .iter()
-                            .zip(bases)
-                            .for_each(|(digit, base)| power *= base.exp_u64(*digit));
-                        generator_power = power;
+                        generator_power = exp_biguint(generator_power, factor);
                     }
                 });
             generator_power
@@ -568,6 +651,18 @@ pub fn test_two_adic_generator_consistency<F: TwoAdicField>() {
     let g = F::two_adic_generator(log_n);
     for bits in 0..=log_n {
         assert_eq!(g.exp_power_of_2(bits), F::two_adic_generator(log_n - bits));
+    }
+}
+
+pub fn test_two_adic_point_collection<F: TwoAdicField>() {
+    let log_n = F::TWO_ADICITY.min(15);
+    for bits in 0..=log_n {
+        let group = TwoAdicMultiplicativeCoset::new(F::ONE, bits).unwrap();
+        let points = group.iter().collect();
+        // Add `map` to avoid calling `BoundedPowers::collect()`
+        #[allow(clippy::map_identity)]
+        let points_expected = group.iter().map(|x| x).collect::<Vec<_>>();
+        assert_eq!(points, points_expected)
     }
 }
 
@@ -689,13 +784,33 @@ where
 }
 
 #[macro_export]
-macro_rules! test_field {
-    ($field:ty, $zeros: expr, $ones: expr, $factors: expr) => {
-        mod field_tests {
+macro_rules! test_ring_with_eq {
+    ($ring:ty, $zeros: expr, $ones: expr) => {
+        mod ring_tests {
+            use p3_field::PrimeCharacteristicRing;
+
             #[test]
             fn test_ring_with_eq() {
-                $crate::test_ring_with_eq::<$field>($zeros, $ones);
+                $crate::test_ring_with_eq::<$ring>($zeros, $ones);
             }
+            #[test]
+            fn test_mul_2exp_u64() {
+                $crate::test_mul_2exp_u64::<$ring>();
+            }
+            #[test]
+            fn test_div_2exp_u64() {
+                $crate::test_div_2exp_u64::<$ring>();
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! test_field {
+    ($field:ty, $zeros: expr, $ones: expr, $factors: expr) => {
+        $crate::test_ring_with_eq!($field, $zeros, $ones);
+
+        mod field_tests {
             #[test]
             fn test_inv_div() {
                 $crate::test_inv_div::<$field>();
@@ -709,16 +824,26 @@ macro_rules! test_field {
                 $crate::test_generator::<$field>($factors);
             }
             #[test]
-            fn test_mul_2exp_u64() {
-                $crate::test_mul_2exp_u64::<$field>();
-            }
-            #[test]
-            fn test_div_2exp_u64() {
-                $crate::test_div_2exp_u64::<$field>();
-            }
-            #[test]
             fn test_streaming() {
                 $crate::test_into_stream::<$field>();
+            }
+            #[test]
+            fn test_powers_collect() {
+                $crate::test_powers_collect::<$field>();
+            }
+        }
+
+        // Looks a little strange but we also check that everything works
+        // when the field is considered as a trivial extension of itself.
+        mod trivial_extension_tests {
+            #[test]
+            fn test_to_from_trivial_extension() {
+                $crate::test_to_from_extension_field::<$field, $field>();
+            }
+
+            #[test]
+            fn test_trivial_packed_extension() {
+                $crate::test_packed_extension::<$field, $field>();
             }
         }
     };
@@ -916,6 +1041,36 @@ macro_rules! test_two_adic_field {
             #[test]
             fn test_two_adic_consistency() {
                 $crate::test_two_adic_generator_consistency::<$field>();
+                $crate::test_two_adic_point_collection::<$field>();
+            }
+
+            // Looks a little strange but we also check that everything works
+            // when the field is considered as a trivial extension of itself.
+            #[test]
+            fn test_two_adic_generator_consistency_as_trivial_extension() {
+                $crate::test_ef_two_adic_generator_consistency::<$field, $field>();
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! test_extension_field {
+    ($field:ty, $ef:ty) => {
+        mod extension_field_tests {
+            #[test]
+            fn test_to_from_extension() {
+                $crate::test_to_from_extension_field::<$field, $ef>();
+            }
+
+            #[test]
+            fn test_galois_extension() {
+                $crate::test_galois_extension::<$field, $ef>();
+            }
+
+            #[test]
+            fn test_packed_extension() {
+                $crate::test_packed_extension::<$field, $ef>();
             }
         }
     };

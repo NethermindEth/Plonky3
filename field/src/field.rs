@@ -3,19 +3,19 @@ use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
 use core::hash::Hash;
 use core::iter::{Product, Sum};
-use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use core::{array, slice};
 
 use num_bigint::BigUint;
-use p3_maybe_rayon::prelude::{ParallelIterator, ParallelSlice};
-use p3_util::iter_array_chunks_padded;
+use p3_maybe_rayon::prelude::*;
+use p3_util::{flatten_to_base, iter_array_chunks_padded};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::exponentiation::bits_u64;
 use crate::integers::{QuotientMap, from_integer_types};
 use crate::packed::PackedField;
-use crate::{Packable, PackedFieldExtension};
+use crate::{Packable, PackedFieldExtension, PackedValue};
 
 /// A commutative ring, `R`, with prime characteristic, `p`.
 ///
@@ -113,6 +113,7 @@ pub trait PrimeCharacteristicRing:
     /// `from_prime_subfield([r])` will be equal to:
     ///
     /// `Self::ONE + ... + Self::ONE (r times)`
+    #[must_use]
     fn from_prime_subfield(f: Self::PrimeSubfield) -> Self;
 
     /// Return `Self::ONE` if `b` is `true` and `Self::ZERO` if `b` is `false`.
@@ -135,6 +136,20 @@ pub trait PrimeCharacteristicRing:
     #[inline(always)]
     fn double(&self) -> Self {
         self.clone() + self.clone()
+    }
+
+    /// The elementary function `halve(a) = a/2`.
+    ///
+    /// # Panics
+    /// The function will panic if the field has characteristic 2.
+    #[must_use]
+    #[inline]
+    fn halve(&self) -> Self {
+        // This must be overwritten by PrimeField implementations as this definition
+        // is circular when PrimeSubfield = Self. It should also be overwritten by
+        // most rings to avoid the multiplication.
+        let half = Self::from_prime_subfield(Self::PrimeSubfield::ONE.halve());
+        self.clone() * half
     }
 
     /// The elementary function `square(a) = a^2`.
@@ -259,7 +274,21 @@ pub trait PrimeCharacteristicRing:
     #[must_use]
     #[inline]
     fn mul_2exp_u64(&self, exp: u64) -> Self {
+        // Some rings might want to reimplement this to avoid the
+        // exponentiations (and potentially even the multiplication).
         self.clone() * Self::TWO.exp_u64(exp)
+    }
+
+    /// Divide by a given power of two. `div_2exp_u64(a, exp) = a/2^exp`
+    ///
+    /// # Panics
+    /// The function will panic if the field has characteristic 2.
+    #[must_use]
+    #[inline]
+    fn div_2exp_u64(&self, exp: u64) -> Self {
+        // Some rings might want to reimplement this to avoid the
+        // exponentiations (and potentially even the multiplication).
+        self.clone() * Self::from_prime_subfield(Self::PrimeSubfield::ONE.halve().exp_u64(exp))
     }
 
     /// Construct an iterator which returns powers of `self`: `self^0, self^1, self^2, ...`.
@@ -349,7 +378,7 @@ pub trait PrimeCharacteristicRing:
     /// write zeros, which would be redundant. However, the compiler may not always recognize this.
     ///
     /// In particular, `vec![Self::ZERO; len]` appears to result in redundant userspace zeroing.
-    /// This is the default implementation, but implementors may wish to provide their own
+    /// This is the default implementation, but implementers may wish to provide their own
     /// implementation which transmutes something like `vec![0u32; len]`.
     #[must_use]
     #[inline]
@@ -536,13 +565,11 @@ impl<F: PrimeCharacteristicRing> BasedVectorSpace<F> for F {
         (iter.len() == 1).then(|| iter.next().unwrap()) // Unwrap will not panic as we know the length is 1.
     }
 
-    #[must_use]
     #[inline]
     fn flatten_to_base(vec: Vec<Self>) -> Vec<F> {
         vec
     }
 
-    #[must_use]
     #[inline]
     fn reconstitute_from_base(vec: Vec<F>) -> Vec<Self> {
         vec
@@ -726,6 +753,10 @@ pub trait Field:
     + 'static
     + Copy
     + Div<Self, Output = Self>
+    + DivAssign
+    + Add<Self::Packing, Output = Self::Packing>
+    + Sub<Self::Packing, Output = Self::Packing>
+    + Mul<Self::Packing, Output = Self::Packing>
     + Eq
     + Hash
     + Send
@@ -769,36 +800,31 @@ pub trait Field:
         self.try_inverse().expect("Tried to invert zero")
     }
 
-    /// The elementary function `halve(a) = a/2`.
+    /// Add two slices of field elements together, returning the result in the first slice.
+    ///
+    /// Makes use of packing to speed up the addition.
+    ///
+    /// This is optimal for cases where the two slices are small to medium length. E.g. between
+    /// `F::Packing::WIDTH` and roughly however many elements fit in a cache line.
+    ///
+    /// For larger slices, it's likely worthwhile to use parallelization before calling this.
+    /// Similarly if you need to add a large number of slices together, it's best to
+    /// break them into small chunks and call this on the smaller chunks.
     ///
     /// # Panics
-    /// The function will panic if the field has characteristic 2.
-    #[must_use]
-    fn halve(&self) -> Self {
-        // This should be overwritten by most field implementations.
-        let half = Self::from_prime_subfield(
-            Self::PrimeSubfield::TWO
-                .try_inverse()
-                .expect("Cannot divide by 2 in fields with characteristic 2"),
-        );
-        *self * half
-    }
-
-    /// Divide by a given power of two. `div_2exp_u64(a, exp) = a/2^exp`
-    ///
-    /// # Panics
-    /// The function will panic if the field has characteristic 2.
-    #[must_use]
+    /// The function will panic if the lengths of the two slices are not equal.
     #[inline]
-    fn div_2exp_u64(&self, exp: u64) -> Self {
-        // This should be overwritten by most field implementations.
-        *self
-            * Self::from_prime_subfield(
-                Self::PrimeSubfield::TWO
-                    .try_inverse()
-                    .expect("Cannot divide by 2 in fields with characteristic 2")
-                    .exp_u64(exp),
-            )
+    fn add_slices(slice_1: &mut [Self], slice_2: &[Self]) {
+        let (shorts_1, suffix_1) = Self::Packing::pack_slice_with_suffix_mut(slice_1);
+        let (shorts_2, suffix_2) = Self::Packing::pack_slice_with_suffix(slice_2);
+        debug_assert_eq!(shorts_1.len(), shorts_2.len());
+        debug_assert_eq!(suffix_1.len(), suffix_2.len());
+        for (x_1, &x_2) in shorts_1.iter_mut().zip(shorts_2) {
+            *x_1 += x_2;
+        }
+        for (x_1, &x_2) in suffix_1.iter_mut().zip(suffix_2) {
+            *x_1 += x_2;
+        }
     }
 
     /// The number of elements in the field.
@@ -939,9 +965,9 @@ pub trait TwoAdicField: Field {
 
 /// An iterator which returns the powers of a base element `b` shifted by current `c`: `c, c * b, c * b^2, ...`.
 #[derive(Clone, Debug)]
-pub struct Powers<F> {
-    pub base: F,
-    pub current: F,
+pub struct Powers<R: PrimeCharacteristicRing> {
+    pub base: R,
+    pub current: R,
 }
 
 impl<R: PrimeCharacteristicRing> Iterator for Powers<R> {
@@ -951,5 +977,101 @@ impl<R: PrimeCharacteristicRing> Iterator for Powers<R> {
         let result = self.current.clone();
         self.current *= self.base.clone();
         Some(result)
+    }
+}
+
+impl<R: PrimeCharacteristicRing> Powers<R> {
+    /// Returns an iterator yielding the first `n` powers.
+    #[inline]
+    #[must_use]
+    pub fn take(self, n: usize) -> BoundedPowers<R> {
+        BoundedPowers { iter: self, n }
+    }
+
+    /// Fills `slice` with the next `slice.len()` powers yielded by the iterator.
+    #[inline]
+    pub fn fill(self, slice: &mut [R]) {
+        slice
+            .iter_mut()
+            .zip(self)
+            .for_each(|(out, next)| *out = next)
+    }
+
+    /// Wrapper for `self.take(n).collect()`.
+    #[inline]
+    #[must_use]
+    pub fn collect_n(self, n: usize) -> Vec<R> {
+        self.take(n).collect()
+    }
+}
+
+impl<F: Field> BoundedPowers<F> {
+    /// Collect exactly `num_powers` ascending powers of `self.base`, starting at `self.current`.
+    ///
+    /// # Details
+    ///
+    /// The computation is split evenly amongst available threads, and each chunk is computed
+    /// using packed fields.
+    ///
+    /// # Performance
+    ///
+    /// Enable the `parallel` feature to enable parallelization.
+    #[must_use]
+    pub fn collect(self) -> Vec<F> {
+        let num_powers = self.n;
+
+        // When num_powers is small, fallback to serial computation
+        if num_powers < 16 {
+            return self.take(num_powers).collect();
+        }
+
+        // Allocate buffer storing packed powers, containing at least `num_powers` scalars.
+        let width = F::Packing::WIDTH;
+        let num_packed = num_powers.div_ceil(width);
+        let mut points_packed = F::Packing::zero_vec(num_packed);
+
+        // Split computation evenly among threads
+        let num_threads = current_num_threads().max(1);
+        let chunk_size = num_packed.div_ceil(num_threads);
+
+        // Precompute base for each chunk.
+        let base = self.iter.base;
+        let chunk_base = base.exp_u64((chunk_size * width) as u64);
+        let shift = self.iter.current;
+
+        points_packed
+            .par_chunks_mut(chunk_size)
+            .enumerate()
+            .for_each(|(chunk_idx, chunk_slice)| {
+                // First power in this chunk
+                let chunk_start = shift * chunk_base.exp_u64(chunk_idx as u64);
+
+                // Fill the chunk with packed powers.
+                F::Packing::packed_shifted_powers(base, chunk_start).fill(chunk_slice);
+            });
+
+        // return the number of requested points, discarding the unused packed powers
+        // SAFETY: size_of::<F::Packing> always divides size_of::<F::Packing>.
+        let mut points = unsafe { flatten_to_base(points_packed) };
+        points.truncate(num_powers);
+        points
+    }
+}
+
+/// Same as [`Powers`], but returns a bounded number of powers.
+#[derive(Clone, Debug)]
+pub struct BoundedPowers<R: PrimeCharacteristicRing> {
+    iter: Powers<R>,
+    n: usize,
+}
+
+impl<R: PrimeCharacteristicRing> Iterator for BoundedPowers<R> {
+    type Item = R;
+
+    fn next(&mut self) -> Option<R> {
+        (self.n != 0).then(|| {
+            self.n -= 1;
+            self.iter.next().unwrap()
+        })
     }
 }

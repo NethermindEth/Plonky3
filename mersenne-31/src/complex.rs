@@ -39,26 +39,18 @@ impl HasTwoAdicBinomialExtension<2> for Mersenne31 {
     const EXT_TWO_ADICITY: usize = 32;
 
     fn ext_two_adic_generator(bits: usize) -> [Self; 2] {
-        // TODO: Consider a `match` which may speed this up.
         assert!(bits <= Self::EXT_TWO_ADICITY);
-        // Generator of the whole 2^TWO_ADICITY group
-        // sage: p = 2^31 - 1
-        // sage: F = GF(p)
-        // sage: R.<x> = F[]
-        // sage: F2.<u> = F.extension(x^2 + 1)
-        // sage: g = F2.multiplicative_generator()^((p^2 - 1) / 2^32); g
-        // 1117296306*u + 1166849849
-        // sage: assert(g.multiplicative_order() == 2^32)
-        let base = Complex::<Self>::new_complex(Self::new(1_166_849_849), Self::new(1_117_296_306));
-        base.exp_power_of_2(Self::EXT_TWO_ADICITY - bits).to_array()
+        Self::EXT_TWO_ADIC_GENERATORS[bits]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use num_bigint::BigUint;
-    use p3_field::PrimeField32;
-    use p3_field_testing::{test_field, test_two_adic_field};
+    use p3_field::{ExtensionField, PrimeField32};
+    use p3_field_testing::{
+        test_extension_field, test_field, test_packed_extension_field, test_two_adic_field,
+    };
 
     use super::*;
 
@@ -190,5 +182,12 @@ mod tests {
         &super::ONES,
         &super::multiplicative_group_prime_factorization()
     );
-    test_two_adic_field!(p3_field::extension::Complex<crate::Mersenne31>);
+
+    test_extension_field!(super::F, super::Fi);
+    test_two_adic_field!(super::Fi);
+
+    type Pef = <Fi as ExtensionField<F>>::ExtensionPacking;
+    const PACKED_ZEROS: [Pef; 1] = [Pef::ZERO];
+    const PACKED_ONES: [Pef; 1] = [Pef::ONE];
+    test_packed_extension_field!(super::Pef, &super::PACKED_ZEROS, &super::PACKED_ONES);
 }

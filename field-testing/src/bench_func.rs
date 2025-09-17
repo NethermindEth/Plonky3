@@ -1,8 +1,9 @@
 use alloc::format;
 use alloc::vec::Vec;
+use core::hint::black_box;
 
-use criterion::{BatchSize, Criterion, black_box};
-use p3_field::{Field, PrimeCharacteristicRing};
+use criterion::{BatchSize, Criterion};
+use p3_field::{Algebra, Field, PrimeCharacteristicRing};
 use rand::distr::StandardUniform;
 use rand::prelude::Distribution;
 use rand::rngs::SmallRng;
@@ -17,7 +18,7 @@ where
     let mut rng = SmallRng::seed_from_u64(1);
     let x = rng.random::<F>();
     let y = rng.random::<F>();
-    c.bench_function(&format!("{} mul", name), |b| {
+    c.bench_function(&format!("{name} mul"), |b| {
         b.iter(|| black_box(black_box(x) * black_box(y)))
     });
 }
@@ -28,7 +29,7 @@ where
 {
     let mut rng = SmallRng::seed_from_u64(1);
     let x = rng.random::<F>();
-    c.bench_function(&format!("{} square", name), |b| {
+    c.bench_function(&format!("{name} square"), |b| {
         b.iter(|| black_box(black_box(x).square()))
     });
 }
@@ -39,7 +40,7 @@ where
 {
     let mut rng = SmallRng::seed_from_u64(1);
     let x = rng.random::<F>();
-    c.bench_function(&format!("{} inv", name), |b| {
+    c.bench_function(&format!("{name} inv"), |b| {
         b.iter(|| black_box(black_box(x)).inverse())
     });
 }
@@ -56,8 +57,22 @@ pub fn benchmark_mul_2exp<R: PrimeCharacteristicRing + Copy, const REPS: usize>(
     for _ in 0..REPS {
         input.push(rng.random::<R>())
     }
-    c.bench_function(&format!("{} mul_2exp_u64 {}", name, val), |b| {
+    c.bench_function(&format!("{name} mul_2exp_u64 {val}"), |b| {
         b.iter(|| input.iter_mut().for_each(|i| *i = i.mul_2exp_u64(val)))
+    });
+}
+
+pub fn benchmark_halve<F: Field, const REPS: usize>(c: &mut Criterion, name: &str)
+where
+    StandardUniform: Distribution<F>,
+{
+    let mut rng = SmallRng::seed_from_u64(1);
+    let mut input = Vec::new();
+    for _ in 0..REPS {
+        input.push(rng.random::<F>())
+    }
+    c.bench_function(&format!("{name} halve. Num Reps: {REPS}"), |b| {
+        b.iter(|| input.iter_mut().for_each(|i| *i = i.halve()))
     });
 }
 
@@ -70,7 +85,7 @@ where
     for _ in 0..REPS {
         input.push(rng.random::<F>())
     }
-    c.bench_function(&format!("{} div_2exp_u64 {}", name, val), |b| {
+    c.bench_function(&format!("{name} div_2exp_u64 {val}"), |b| {
         b.iter(|| input.iter_mut().for_each(|i| *i = i.div_2exp_u64(val)))
     });
 }
@@ -91,7 +106,7 @@ pub fn benchmark_iter_sum<R: PrimeCharacteristicRing + Copy, const N: usize, con
     for _ in 0..REPS {
         input.push(rng.random::<[R; N]>())
     }
-    c.bench_function(&format!("{} sum/{}, {}", name, REPS, N), |b| {
+    c.bench_function(&format!("{name} sum/{REPS}, {N}"), |b| {
         b.iter(|| {
             let mut acc = R::ZERO;
             for row in &mut input {
@@ -118,7 +133,7 @@ pub fn benchmark_sum_array<R: PrimeCharacteristicRing + Copy, const N: usize, co
     for _ in 0..REPS {
         input.push(rng.random::<[R; N]>())
     }
-    c.bench_function(&format!("{} tree sum/{}, {}", name, REPS, N), |b| {
+    c.bench_function(&format!("{name} tree sum/{REPS}, {N}"), |b| {
         b.iter(|| {
             let mut acc = R::ZERO;
             for row in &mut input {
@@ -143,8 +158,28 @@ pub fn benchmark_dot_array<R: PrimeCharacteristicRing + Copy, const N: usize>(
     let lhs = rng.random::<[R; N]>();
     let rhs = rng.random::<[R; N]>();
 
-    c.bench_function(&format!("{} dot product/{}", name, N), |b| {
+    c.bench_function(&format!("{name} dot product/{N}"), |b| {
         b.iter(|| black_box(R::dot_product(black_box(&lhs), black_box(&rhs))))
+    });
+}
+
+/// Benchmark the time taken to add two slices together.
+pub fn benchmark_add_slices<F: Field, const LENGTH: usize>(c: &mut Criterion, name: &str)
+where
+    StandardUniform: Distribution<F>,
+{
+    let mut rng = SmallRng::seed_from_u64(1);
+    let mut slice_1 = Vec::new();
+    let mut slice_2 = Vec::new();
+    for _ in 0..LENGTH {
+        slice_1.push(rng.random());
+        slice_2.push(rng.random());
+    }
+    c.bench_function(&format!("{name} add slices/{LENGTH}"), |b| {
+        let mut in_slice = slice_1.clone();
+        b.iter(|| {
+            F::add_slices(&mut in_slice, &slice_2);
+        })
     });
 }
 
@@ -154,7 +189,7 @@ pub fn benchmark_add_latency<R: PrimeCharacteristicRing + Copy, const N: usize>(
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("add-latency/{} {}", N, name), |b| {
+    c.bench_function(&format!("add-latency/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -176,7 +211,7 @@ pub fn benchmark_add_throughput<R: PrimeCharacteristicRing + Copy, const N: usiz
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("add-throughput/{} {}", N, name), |b| {
+    c.bench_function(&format!("add-throughput/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -221,7 +256,7 @@ pub fn benchmark_sub_latency<R: PrimeCharacteristicRing + Copy, const N: usize>(
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("sub-latency/{} {}", N, name), |b| {
+    c.bench_function(&format!("sub-latency/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -243,7 +278,7 @@ pub fn benchmark_sub_throughput<R: PrimeCharacteristicRing + Copy, const N: usiz
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("sub-throughput/{} {}", N, name), |b| {
+    c.bench_function(&format!("sub-throughput/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -288,7 +323,7 @@ pub fn benchmark_mul_latency<R: PrimeCharacteristicRing + Copy, const N: usize>(
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("mul-latency/{} {}", N, name), |b| {
+    c.bench_function(&format!("mul-latency/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -310,7 +345,7 @@ pub fn benchmark_mul_throughput<R: PrimeCharacteristicRing + Copy, const N: usiz
 ) where
     StandardUniform: Distribution<R>,
 {
-    c.bench_function(&format!("mul-throughput/{} {}", N, name), |b| {
+    c.bench_function(&format!("mul-throughput/{N} {name}"), |b| {
         b.iter_batched(
             || {
                 let mut rng = SmallRng::seed_from_u64(1);
@@ -343,6 +378,117 @@ pub fn benchmark_mul_throughput<R: PrimeCharacteristicRing + Copy, const N: usiz
                     );
                 }
                 (a, b, c, d, e, f, g, h, i, j)
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+pub fn benchmark_base_mul_latency<F: Field, A: Algebra<F> + Copy, const N: usize>(
+    c: &mut Criterion,
+    name: &str,
+) where
+    StandardUniform: Distribution<F> + Distribution<A>,
+{
+    c.bench_function(&format!("base_mul-latency/{N} {name}"), |b| {
+        b.iter_batched(
+            || {
+                let mut rng = SmallRng::seed_from_u64(1);
+                let mut vec = Vec::new();
+                for _ in 0..N {
+                    vec.push(rng.random::<F>())
+                }
+                let init_val = rng.random::<A>();
+                (vec, init_val)
+            },
+            |(x, init_val)| x.iter().fold(init_val, |x, y| x * *y),
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+pub fn benchmark_base_mul_throughput<F: Field, A: Algebra<F> + Copy, const N: usize>(
+    c: &mut Criterion,
+    name: &str,
+) where
+    StandardUniform: Distribution<F> + Distribution<A>,
+{
+    c.bench_function(&format!("base_mul-throughput/{N} {name}"), |b| {
+        b.iter_batched(
+            || {
+                let mut rng = SmallRng::seed_from_u64(1);
+                let a_tuple = (
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                    rng.random::<A>(),
+                );
+                let f_tuple = (
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                    rng.random::<F>(),
+                );
+                (a_tuple, f_tuple)
+            },
+            |(
+                (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h, mut i, mut j),
+                (a_f, b_f, c_f, d_f, e_f, f_f, g_f, h_f, i_f, j_f),
+            )| {
+                for _ in 0..N {
+                    (a, b, c, d, e, f, g, h, i, j) = (
+                        a * a_f,
+                        b * b_f,
+                        c * c_f,
+                        d * d_f,
+                        e * e_f,
+                        f * f_f,
+                        g * g_f,
+                        h * h_f,
+                        i * i_f,
+                        j * j_f,
+                    );
+                }
+                (a, b, c, d, e, f, g, h, i, j)
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+/// Benchmarks the `exp_const_u64` implementation for a given `POWER`.
+///
+/// This function measures the throughput of the exponentiation by applying the operation
+/// to a vector of `REPS` random elements.
+pub fn benchmark_exp_const<R: PrimeCharacteristicRing + Copy, const POWER: u64, const REPS: usize>(
+    c: &mut Criterion,
+    name: &str,
+) where
+    StandardUniform: Distribution<R>,
+{
+    let mut rng = SmallRng::seed_from_u64(1);
+    let input: Vec<R> = (0..REPS).map(|_| rng.random()).collect();
+
+    c.bench_function(&format!("{name} exp_const<{POWER}>/{REPS}"), |b| {
+        b.iter_batched(
+            || input.clone(),
+            |mut data| {
+                for x in data.iter_mut() {
+                    *x = x.exp_const_u64::<POWER>();
+                }
+                black_box(data);
             },
             BatchSize::SmallInput,
         )

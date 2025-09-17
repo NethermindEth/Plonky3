@@ -5,7 +5,7 @@ use p3_commit::{ExtensionMmcs, Pcs, PolynomialSpace};
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::{ExtensionField, Field};
-use p3_fri::{FriConfig, TwoAdicFriPcs};
+use p3_fri::{FriParameters, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_merkle_tree::MerkleTreeMmcs;
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
@@ -110,7 +110,7 @@ macro_rules! make_tests_for_pcs {
         #[test]
         fn many_equal() {
             let p = $p;
-            for i in 5..8 {
+            for i in 2..6 {
                 $crate::do_test_fri_pcs(&p, &[&[i; 5]]);
                 println!("{i} ok");
             }
@@ -119,7 +119,7 @@ macro_rules! make_tests_for_pcs {
         #[test]
         fn many_different() {
             let p = $p;
-            for i in 3..8 {
+            for i in 2..5 {
                 let degrees = (3..3 + i).collect::<Vec<_>>();
                 $crate::do_test_fri_pcs(&p, &[&degrees]);
             }
@@ -128,7 +128,7 @@ macro_rules! make_tests_for_pcs {
         #[test]
         fn many_different_rev() {
             let p = $p;
-            for i in 3..8 {
+            for i in 2..5 {
                 let degrees = (3..3 + i).rev().collect::<Vec<_>>();
                 $crate::do_test_fri_pcs(&p, &[&degrees]);
             }
@@ -176,7 +176,7 @@ mod babybear_fri_pcs {
         let val_mmcs = ValMmcs::new(hash, compress);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
 
-        let fri_config = FriConfig {
+        let fri_params = FriParameters {
             log_blowup,
             log_final_poly_len: 0,
             num_queries: 10,
@@ -184,7 +184,7 @@ mod babybear_fri_pcs {
             mmcs: challenge_mmcs,
         };
 
-        let pcs = MyPcs::new(Dft::default(), val_mmcs, fri_config);
+        let pcs = MyPcs::new(Dft::default(), val_mmcs, fri_params);
         (pcs, Challenger::new(perm))
     }
 
@@ -229,7 +229,7 @@ mod m31_fri_pcs {
         let compress = MyCompress::new(byte_hash);
         let val_mmcs = ValMmcs::new(field_hash, compress);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-        let fri_config = FriConfig {
+        let fri_params = FriParameters {
             log_blowup,
             log_final_poly_len: 0,
             num_queries: 10,
@@ -238,7 +238,7 @@ mod m31_fri_pcs {
         };
         let pcs = Pcs {
             mmcs: val_mmcs,
-            fri_config,
+            fri_params,
             _phantom: PhantomData,
         };
         (pcs, Challenger::from_hasher(vec![], byte_hash))

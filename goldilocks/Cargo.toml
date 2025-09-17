@@ -1,19 +1,22 @@
 [package]
 name = "p3-goldilocks"
-version = "0.1.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
-
-[features]
-nightly-features = []
+description = "An implementation of the Goldilocks prime field F_p, where p = 2^64 - 2^32 + 1."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-p3-field.workspace = true
 p3-dft.workspace = true
+p3-field.workspace = true
 p3-mds.workspace = true
+p3-poseidon2.workspace = true
 p3-symmetric.workspace = true
 p3-util.workspace = true
-p3-poseidon2.workspace = true
+
 num-bigint.workspace = true
 paste.workspace = true
 rand.workspace = true
@@ -22,8 +25,9 @@ serde = { workspace = true, features = ["derive"] }
 [dev-dependencies]
 p3-field-testing.workspace = true
 p3-poseidon.workspace = true
-rand.workspace = true
+
 criterion.workspace = true
+rand.workspace = true
 
 [[bench]]
 name = "bench_field"

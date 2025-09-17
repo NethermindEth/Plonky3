@@ -6,15 +6,55 @@ use p3_symmetric::{CryptographicPermutation, Hash};
 
 use crate::{CanObserve, CanSample, CanSampleBits, FieldChallenger};
 
+/// A generic duplex sponge challenger over a finite field, used for generating deterministic
+/// challenges from absorbed inputs.
+///
+/// This structure implements a duplex sponge that alternates between:
+/// - Absorbing inputs into the sponge state,
+/// - Applying a cryptographic permutation over the state,
+/// - Squeezing outputs from the state as challenges.
+///
+/// The sponge operates over a state of `WIDTH` elements, divided into:
+/// - A rate of `RATE` elements (the portion exposed to input/output),
+/// - A capacity of `WIDTH - RATE` elements (the hidden part ensuring security).
+///
+/// The challenger buffers observed inputs until the rate is full, applies the permutation,
+/// and then produces challenge outputs from the permuted state. It supports:
+/// - Observing single values, arrays, hashes, or nested vectors,
+/// - Sampling fresh challenges as field elements or bitstrings.
 #[derive(Clone, Debug)]
 pub struct DuplexChallenger<F, P, const WIDTH: usize, const RATE: usize>
 where
     F: Clone,
     P: CryptographicPermutation<[F; WIDTH]>,
 {
+    /// The internal sponge state, consisting of `WIDTH` field elements.
+    ///
+    /// The first `RATE` elements form the rate section, where input values are absorbed
+    /// and output values are squeezed.
+    /// The remaining `WIDTH - RATE` elements form the capacity, which provides hidden
+    /// entropy and security against attacks.
     pub sponge_state: [F; WIDTH],
+
+    /// A buffer holding field elements that have been observed but not yet absorbed.
+    ///
+    /// Inputs added via `observe` are collected here.
+    /// Once the buffer reaches `RATE` elements, the sponge performs a duplexing step:
+    /// it absorbs the inputs into the state and applies the permutation.
     pub input_buffer: Vec<F>,
+
+    /// A buffer holding field elements that have been squeezed from the sponge state.
+    ///
+    /// Outputs are produced by `duplexing` and stored here.
+    /// Calls to `sample` or `sample_bits` pop values from this buffer.
+    /// When the buffer is empty (or new inputs were absorbed), a new duplexing step is triggered.
     pub output_buffer: Vec<F>,
+
+    /// The cryptographic permutation applied to the sponge state.
+    ///
+    /// This permutation must provide strong pseudorandomness and collision resistance,
+    /// ensuring that squeezed outputs are indistinguishable from random and securely
+    /// bound to the absorbed inputs.
     pub permutation: P,
 }
 
@@ -147,6 +187,14 @@ where
     F: PrimeField64,
     P: CryptographicPermutation<[F; WIDTH]>,
 {
+    /// The sampled bits are not perfectly uniform, but we can bound the error: every sequence
+    /// appears with probability 1/p-close to uniform (1/2^b).
+    ///
+    /// Proof:
+    /// We denote p = F::ORDER_U64, and b = `bits`.
+    /// If X follows a uniform distribution over F, if we consider the first b bits of X, each
+    /// sequence appears either with probability P1 = ⌊p / 2^b⌋ / p or P2 = (1 + ⌊p / 2^b⌋) / p.
+    /// We have 1/2^b - 1/p ≤ P1, P2 ≤ 1/2^b + 1/p
     fn sample_bits(&mut self, bits: usize) -> usize {
         assert!(bits < (usize::BITS as usize));
         assert!((1 << bits) < F::ORDER_U64);

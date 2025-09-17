@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use core::hash::Hash;
 
-use p3_field::{Field, PrimeCharacteristicRing};
+use p3_field::{Algebra, PrimeCharacteristicRing};
 
 use crate::MontyField31;
 
@@ -29,15 +29,11 @@ pub trait PackedMontyParameters: crate::MontyParametersNeon + MontyParameters {}
 #[cfg(all(
     target_arch = "x86_64",
     target_feature = "avx2",
-    not(all(feature = "nightly-features", target_feature = "avx512f"))
+    not(target_feature = "avx512f")
 ))]
 /// PackedMontyParameters contains constants needed for MONTY operations for packings of Monty31 fields.
 pub trait PackedMontyParameters: crate::MontyParametersAVX2 + MontyParameters {}
-#[cfg(all(
-    feature = "nightly-features",
-    target_arch = "x86_64",
-    target_feature = "avx512f"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
 /// PackedMontyParameters contains constants needed for MONTY operations for packings of Monty31 fields.
 pub trait PackedMontyParameters: crate::MontyParametersAVX512 + MontyParameters {}
 #[cfg(not(any(
@@ -45,13 +41,9 @@ pub trait PackedMontyParameters: crate::MontyParametersAVX512 + MontyParameters 
     all(
         target_arch = "x86_64",
         target_feature = "avx2",
-        not(all(feature = "nightly-features", target_feature = "avx512f"))
+        not(target_feature = "avx512f")
     ),
-    all(
-        feature = "nightly-features",
-        target_arch = "x86_64",
-        target_feature = "avx512f"
-    ),
+    all(target_arch = "x86_64", target_feature = "avx512f"),
 )))]
 /// PackedMontyParameters contains constants needed for MONTY operations for packings of Monty31 fields.
 pub trait PackedMontyParameters: MontyParameters {}
@@ -76,8 +68,6 @@ pub trait FieldParameters: PackedMontyParameters + Sized {
     const MONTY_GEN: MontyField31<Self>;
 
     const HALF_P_PLUS_1: u32 = (Self::PRIME + 1) >> 1;
-
-    fn try_inverse<F: Field>(p1: F) -> Option<F>;
 }
 
 /// An integer `D` such that `gcd(D, p - 1) = 1`.
@@ -126,6 +116,15 @@ pub trait TwoAdicData: MontyParameters {
 pub trait BinomialExtensionData<const DEG: usize>: MontyParameters + Sized {
     /// W is a value such that (x^DEG - W) is irreducible.
     const W: MontyField31<Self>;
+
+    /// Multiply a field element (or packed field element) by W.
+    ///
+    /// Defaults to standard multiplication but this can be reimplemented to
+    /// make use of the exact value of `W`. E.g. if `W = 2, 3` this should be
+    /// reimplemented using addition.
+    fn mul_w<A: Algebra<MontyField31<Self>>>(a: A) -> A {
+        a * Self::W
+    }
 
     /// DTH_ROOT = W^((p - 1)/DEG)
     const DTH_ROOT: MontyField31<Self>;

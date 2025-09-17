@@ -1,5 +1,4 @@
 //! A framework for finite fields.
-
 #![no_std]
 
 extern crate alloc;
@@ -12,6 +11,7 @@ pub mod extension;
 mod field;
 mod helpers;
 pub mod integers;
+pub mod op_assign_macros;
 mod packed;
 
 pub use array::*;

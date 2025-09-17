@@ -7,6 +7,7 @@ use crate::{MontyParameters, MontyParametersAVX2, TwoAdicData};
 // https://godbolt.org/z/9P71nYrqh
 
 /// Halve a vector of Monty31 field elements in canonical form.
+///
 /// If the inputs are not in canonical form, the result is undefined.
 #[inline(always)]
 pub(crate) fn halve_avx2<MP: MontyParameters>(input: __m256i) -> __m256i {
@@ -135,7 +136,9 @@ pub unsafe fn mul_2exp_neg_n_avx2<TAD: TwoAdicData, const N: i32, const N_PRIME:
         latency: 8
     */
     unsafe {
-        assert_eq!(N + N_PRIME, TAD::TWO_ADICITY as i32); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(N + N_PRIME == TAD::TWO_ADICITY as i32);
+        }
 
         let odd_factor = x86_64::_mm256_set1_epi32(TAD::ODD_FACTOR); // This is [r; 8]. Compiler realises this is a constant.
         let mask = x86_64::_mm256_set1_epi32((1_i32 << N) - 1_i32); // Compiler realises this is a constant.
@@ -175,7 +178,9 @@ pub unsafe fn mul_neg_2exp_neg_n_avx2<TAD: TwoAdicData, const N: i32, const N_PR
         latency: 8
     */
     unsafe {
-        assert_eq!(N + N_PRIME, TAD::TWO_ADICITY as i32); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(N + N_PRIME == TAD::TWO_ADICITY as i32);
+        }
 
         let odd_factor = x86_64::_mm256_set1_epi32(TAD::ODD_FACTOR); // This is [r; 8]. Compiler realises this is a constant.
         let mask = x86_64::_mm256_set1_epi32((1_i32 << N) - 1_i32); // Compiler realises this is a constant.
@@ -211,7 +216,9 @@ pub unsafe fn mul_2exp_neg_8_avx2<TAD: TwoAdicData, const N_PRIME: i32>(input: _
         latency: 7
     */
     unsafe {
-        assert_eq!(8 + N_PRIME, TAD::TWO_ADICITY as i32); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(8 + N_PRIME == TAD::TWO_ADICITY as i32);
+        }
 
         let odd_factor = x86_64::_mm256_set1_epi32(TAD::ODD_FACTOR); // This is [r; 8]. Compiler realises this is a constant.
 
@@ -250,7 +257,9 @@ pub unsafe fn mul_neg_2exp_neg_8_avx2<TAD: TwoAdicData, const N_PRIME: i32>(
         latency: 7
     */
     unsafe {
-        assert_eq!(8 + N_PRIME, TAD::TWO_ADICITY as i32); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(8 + N_PRIME == TAD::TWO_ADICITY as i32);
+        }
 
         let odd_factor = x86_64::_mm256_set1_epi32(TAD::ODD_FACTOR); // This is [r; 8]. Compiler realises this is a constant.
 
@@ -290,8 +299,10 @@ pub unsafe fn mul_2exp_neg_two_adicity_avx2<TAD: TwoAdicData, const N: i32, cons
         latency: 3
     */
     unsafe {
-        assert_eq!(N, (TAD::TWO_ADICITY as i32)); // Compiler removes this provided it is satisfied.
-        assert_eq!(N + N_PRIME, 31); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(N == TAD::TWO_ADICITY as i32);
+            assert!(N + N_PRIME == 31);
+        }
 
         let mask = x86_64::_mm256_set1_epi32((1_i32 << N) - 1_i32); // Compiler realises this is a constant.
         let hi = x86_64::_mm256_srli_epi32::<N>(input);
@@ -330,8 +341,10 @@ pub unsafe fn mul_neg_2exp_neg_two_adicity_avx2<
         latency: 3
     */
     unsafe {
-        assert_eq!(N, (TAD::TWO_ADICITY as i32)); // Compiler removes this provided it is satisfied.
-        assert_eq!(N + N_PRIME, 31); // Compiler removes this provided it is satisfied.
+        const {
+            assert!(N == TAD::TWO_ADICITY as i32);
+            assert!(N + N_PRIME == 31);
+        }
 
         let mask = x86_64::_mm256_set1_epi32((1_i32 << N) - 1_i32); // Compiler realises this is a constant.
         let hi = x86_64::_mm256_srli_epi32::<N>(input);

@@ -55,6 +55,7 @@ pub trait QuotientMap<Int>: Sized {
     /// This method is also strongly preferred over `from_canonical_checked/from_canonical_unchecked`.
     /// It will usually be identical when `Int` is a small type, e.g. `u8/u16` and is safer for
     /// larger types.
+    #[must_use]
     fn from_int(int: Int) -> Self;
 
     /// Convert a given integer into an element of the field `ℤ/p`. The input is checked to
@@ -63,6 +64,7 @@ pub trait QuotientMap<Int>: Sized {
     /// - If `Int` is a signed integer type the input must lie in `[-(p - 1)/2, (p - 1)/2]`.
     ///
     /// Return `None` if the input lies outside this range and `Some(val)` otherwise.
+    #[must_use]
     fn from_canonical_checked(int: Int) -> Option<Self>;
 
     /// Convert a given integer into an element of the field `ℤ/p`. The input is guaranteed
@@ -75,6 +77,7 @@ pub trait QuotientMap<Int>: Sized {
     /// # Safety
     /// - If `Int` is an unsigned integer type then the allowed range will include `[0, p - 1]`.
     /// - If `Int` is a signed integer type then the allowed range will include `[-(p - 1)/2, (p - 1)/2]`.
+    #[must_use]
     unsafe fn from_canonical_unchecked(int: Int) -> Self;
 }
 
@@ -89,8 +92,8 @@ macro_rules! quotient_map_small_internals {
         \n Due to the integer type, the input value is always canonical.")]
         #[inline]
         fn from_int(int: $small_int) -> Self {
-            // Should be removed by the compiler.
-            assert!(size_of::<$small_int>() < size_of::<$field_size>());
+            // Check at compile time.
+            const { assert!(size_of::<$small_int>() < size_of::<$field_size>()); }
             unsafe {
                 Self::from_canonical_unchecked(int as $field_size)
             }
@@ -100,8 +103,8 @@ macro_rules! quotient_map_small_internals {
         \n Due to the integer type, the input value is always canonical.")]
         #[inline]
         fn from_canonical_checked(int: $small_int) -> Option<Self> {
-            // Should be removed by the compiler.
-            assert!(size_of::<$small_int>() < size_of::<$field_size>());
+            // Check at compile time.
+            const { assert!(size_of::<$small_int>() < size_of::<$field_size>()); }
             Some(unsafe {
                 Self::from_canonical_unchecked(int as $field_size)
             })
@@ -111,8 +114,8 @@ macro_rules! quotient_map_small_internals {
         \n Due to the integer type, the input value is always canonical.")]
         #[inline]
         unsafe fn from_canonical_unchecked(int: $small_int) -> Self {
-            // We use debug_assert to ensure this is removed by the compiler in release mode.
-            debug_assert!(size_of::<$small_int>() < size_of::<$field_size>());
+            // Check at compile time.
+            const { assert!(size_of::<$small_int>() < size_of::<$field_size>()); }
             unsafe {
                 Self::from_canonical_unchecked(int as $field_size)
             }
@@ -146,8 +149,8 @@ macro_rules! quotient_map_small_internals {
 ///     /// Due to the integer type, the input value is always canonical.
 ///     #[inline]
 ///     fn from_int(int: u8) -> Mersenne31 {
-///         // Should be removed by the compiler.
-///         assert!(size_of::<u8>() < size_of::<u32>());
+///         // Check at compile time.
+///         const { assert!(size_of::<u8>() < size_of::<u32>()); }
 ///         unsafe {
 ///             Self::from_canonical_unchecked(int as u32)
 ///         }
@@ -158,8 +161,8 @@ macro_rules! quotient_map_small_internals {
 ///     /// Due to the integer type, the input value is always canonical.
 ///     #[inline]
 ///     fn from_canonical_checked(int: u8) -> Option<Mersenne31> {
-///         // Should be removed by the compiler.
-///         assert!(size_of::<u8>() < size_of::<u32>());
+///         // Check at compile time.
+///         const { assert!(size_of::<u8>() < size_of::<u32>()); }
 ///         Some(unsafe {
 ///             Self::from_canonical_unchecked(int as u32)
 ///         })
@@ -170,8 +173,8 @@ macro_rules! quotient_map_small_internals {
 ///     /// Due to the integer type, the input value is always canonical.
 ///     #[inline]
 ///     unsafe fn from_canonical_unchecked(int: u8) -> Mersenne31 {
-///         // We use debug_assert to ensure this is removed by the compiler in release mode.
-///         debug_assert!(size_of::<u8>() < size_of::<u32>());
+///         // Check at compile time.
+///         const { assert!(size_of::<u8>() < size_of::<u32>()); }
 ///         unsafe {
 ///             Self::from_canonical_unchecked(int as u32)
 ///         }
@@ -226,8 +229,8 @@ macro_rules! quotient_map_small_int {
 ///     /// This should be avoided in performance critical locations.
 ///     #[inline]
 ///     fn from_int(int: u128) -> Mersenne31 {
-///         // Should be removed by the compiler.
-///         assert!(size_of::<u128>() > size_of::<u32>());
+///         // Check at compile time.
+///         const { assert!(size_of::<u128>() > size_of::<u32>()); }
 ///         let red = (int % (Mersenne31::ORDER_U32 as u128)) as u32;
 ///            unsafe {
 ///                // This is safe as red is less than the field order by assumption.
@@ -271,7 +274,7 @@ macro_rules! quotient_map_large_uint {
                 \n Uses a modular reduction to reduce to canonical form. \n This should be avoided in performance critical locations.")]
             #[inline]
             fn from_int(int: $large_int) -> $field {
-                assert!(size_of::<$large_int>() > size_of::<$field_size>());
+                const { assert!(size_of::<$large_int>() > size_of::<$field_size>()); }
                 let red = (int % ($field_order as $large_int)) as $field_size;
                 unsafe {
                     // This is safe as red is less than the field order by assumption.

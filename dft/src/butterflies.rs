@@ -114,12 +114,51 @@ pub trait Butterfly<F: Field>: Copy + Send + Sync {
 /// The twiddle factor is applied after subtraction.
 /// Suitable for DIF-style recursive transforms.
 #[derive(Copy, Clone)]
+#[repr(transparent)] // Allows safe transmutes from F to this.
 pub struct DifButterfly<F>(pub F);
 
 impl<F: Field> Butterfly<F> for DifButterfly<F> {
     #[inline]
     fn apply<PF: PackedField<Scalar = F>>(&self, x_1: PF, x_2: PF) -> (PF, PF) {
         (x_1 + x_2, (x_1 - x_2) * self.0)
+    }
+}
+
+/// DIF (Decimation-In-Frequency) butterfly operation where `x_2` is guaranteed to be zero.
+///
+/// Useful in scenarios where the input has just been padded with zeros.
+///
+/// Used in the *output-ordering* variant of NTT.
+/// This butterfly computes:
+/// ```text
+///   output_1 = x1
+///   output_2 = x1 * twiddle
+/// ```
+#[derive(Copy, Clone)]
+#[repr(transparent)] // Allows safe transmutes from F to this.
+pub struct DifButterflyZeros<F>(pub F);
+
+impl<F: Field> Butterfly<F> for DifButterflyZeros<F> {
+    #[inline]
+    fn apply<PF: PackedField<Scalar = F>>(&self, x_1: PF, x_2: PF) -> (PF, PF) {
+        debug_assert!(x_2.as_slice().iter().all(|x| x.is_zero())); // Slightly convoluted but PF may not implement equality.
+        (x_1, x_1 * self.0)
+    }
+
+    #[inline]
+    fn apply_to_rows(&self, row_1: &mut [F], row_2: &mut [F]) {
+        let (shorts_1, suffix_1) = F::Packing::pack_slice_with_suffix(row_1);
+        let (shorts_2, suffix_2) = F::Packing::pack_slice_with_suffix_mut(row_2);
+        debug_assert_eq!(shorts_1.len(), shorts_2.len());
+        debug_assert_eq!(suffix_1.len(), suffix_2.len());
+        for (x_1, x_2) in shorts_1.iter().zip(shorts_2) {
+            debug_assert!(x_2.as_slice().iter().all(|x| x.is_zero())); // Slightly convoluted but PF may not implement equality.
+            *x_2 = *x_1 * self.0; // x_2 is guaranteed to be zero, so we just set it to x_1 * twiddle. 
+        }
+        for (x_1, x_2) in suffix_1.iter().zip(suffix_2) {
+            debug_assert!(x_2.is_zero());
+            *x_2 = *x_1 * self.0; // x_2 is guaranteed to be zero, so we just set it to x_1 * twiddle. 
+        }
     }
 }
 
@@ -134,6 +173,7 @@ impl<F: Field> Butterfly<F> for DifButterfly<F> {
 /// The twiddle factor is applied to x2 before combining.
 /// Suitable for DIT-style recursive transforms.
 #[derive(Copy, Clone)]
+#[repr(transparent)] // Allows safe transmutes from F to this.
 pub struct DitButterfly<F>(pub F);
 
 impl<F: Field> Butterfly<F> for DitButterfly<F> {

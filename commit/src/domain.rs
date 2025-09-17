@@ -2,10 +2,7 @@ use alloc::vec::Vec;
 
 use itertools::Itertools;
 use p3_field::coset::TwoAdicMultiplicativeCoset;
-use p3_field::{
-    ExtensionField, Field, TwoAdicField, batch_multiplicative_inverse,
-    cyclic_subgroup_coset_known_order,
-};
+use p3_field::{ExtensionField, Field, TwoAdicField, batch_multiplicative_inverse};
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_util::{log2_ceil_usize, log2_strict_usize};
@@ -91,6 +88,7 @@ pub trait PolynomialSpace: Copy {
     /// of polynomial evaluations over each `PolynomialSpace` generated from `split_domains`.
     ///
     /// `evals.height()` must equal `self.size()` and `num_chunks` must divide `self.size()`.
+    /// `evals` are assumed to be in standard (not bit-reversed) order.
     fn split_evals(
         &self,
         num_chunks: usize,
@@ -194,14 +192,31 @@ impl<Val: TwoAdicField> PolynomialSpace for TwoAdicMultiplicativeCoset<Val> {
     ) -> Vec<RowMajorMatrix<Self::Val>> {
         debug_assert_eq!(evals.height(), self.size());
         debug_assert!(log2_strict_usize(num_chunks) <= self.log_size());
-        // todo less copy
-        (0..num_chunks)
-            .map(|i| {
-                evals
-                    .as_view()
-                    .vertically_strided(num_chunks, i)
-                    .to_row_major_matrix()
-            })
+        let height = evals.height();
+        let width = evals.width();
+        let rows_per_chunk = height / num_chunks;
+
+        // Preallocate zeroed buffers per chunk; often faster for field elements.
+        let mut values: Vec<Vec<Self::Val>> = (0..num_chunks)
+            .map(|_| Self::Val::zero_vec(rows_per_chunk * width))
+            .collect();
+
+        // Distribute rows without using modulo: iterate blocks of size num_chunks.
+        for i in 0..rows_per_chunk {
+            let base_row = i * num_chunks;
+            let dst_start = i * width;
+            let dst_end = dst_start + width;
+            for (chunk, dst_vec) in values.iter_mut().enumerate().take(num_chunks) {
+                let r = base_row + chunk;
+                // Safety: r < height == rows_per_chunk * num_chunks
+                let row = unsafe { evals.row_slice_unchecked(r) };
+                dst_vec[dst_start..dst_end].copy_from_slice(&row);
+            }
+        }
+
+        values
+            .into_iter()
+            .map(|v| RowMajorMatrix::new(v, width))
             .collect()
     }
 
@@ -248,12 +263,7 @@ impl<Val: TwoAdicField> PolynomialSpace for TwoAdicMultiplicativeCoset<Val> {
             .map(|x| s_pow_n * x - Val::ONE)
             .collect_vec();
 
-        let xs = cyclic_subgroup_coset_known_order(
-            coset.subgroup_generator(),
-            coset.shift(),
-            coset.size(),
-        )
-        .collect_vec();
+        let xs = coset.iter().collect();
 
         let single_point_selector = |i: u64| {
             let coset_i = self.subgroup_generator().exp_u64(i);

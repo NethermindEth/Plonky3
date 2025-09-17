@@ -5,11 +5,10 @@ use itertools::Itertools;
 use p3_air::logup::LogupInteractionAirBuilder;
 use p3_air::symbolic_builder::SymbolicAirBuilder;
 use p3_air::symbolic_expression::SymbolicExpression;
-use p3_air::symbolic_variable::Entry;
-use p3_air::{Air, BaseAir, ExtensionBuilder};
+use p3_air::{Air, BaseAir};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
-use p3_field::{BasedVectorSpace, Field, PackedValue, PrimeCharacteristicRing};
+use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::{Matrix, stack::VerticalPair};
 use p3_maybe_rayon::prelude::*;
@@ -177,7 +176,6 @@ where
         let mut challenger = config.initialise_challenger();
         let trace_domain = pcs.natural_domain_for_degree(degree);
         let ext_trace_domain = pcs.natural_domain_for_degree(degree * (config.is_zk() + 1));
-
         let (trace_commit, trace_data) = info_span!("commit to trace data")
             .in_scope(|| pcs.commit([(ext_trace_domain, trace.clone())]));
 
@@ -243,6 +241,15 @@ where
             constraint_count,
         );
 
+        // Due to `alpha`, evaluations of `Q` all lie in the extension field `E`.
+        // We flatten this into a matrix of `F` values by treating `E` as an `F`
+        // vector space and so separating each element of `E` into `e + 1 = [E: F]` elements of `F`.
+        //
+        // This is valid to do because our domain lies in the base field `F`. Hence we can split
+        // `Q(x)` into `e + 1` polynomials `Q_0(x), ... , Q_e(x)` each contained in `F`.
+        // such that `Q(x) = [Q_0(x), ... ,Q_e(x)]` holds for all `x` in `F`.
+        let quotient_flat = RowMajorMatrix::new_col(quotient_values).flatten_to_base();
+
         let cumulative_sum: <SC as StarkGenericConfig>::Challenge = (0..num_interactions)
             .map(|i| {
                 permutation_trace
@@ -254,12 +261,8 @@ where
             vec![cumulative_sum],
         ));
 
-        let quotient_flat = RowMajorMatrix::new_col(quotient_values).flatten_to_base();
-        let quotient_chunks = quotient_domain.split_evals(quotient_degree, quotient_flat);
-        let qc_domains = quotient_domain.split_domains(quotient_degree);
-
         let (quotient_commit, quotient_data) = info_span!("commit to quotient poly chunks")
-            .in_scope(|| pcs.commit_quotient(qc_domains, quotient_chunks));
+            .in_scope(|| pcs.commit_quotient(quotient_domain, quotient_flat, quotient_degree));
         challenger.observe(quotient_commit.clone());
 
         // If zk is enabled, we generate random extension field values of the size of the randomized trace. If `n` is the degree of the initial trace,
@@ -351,7 +354,6 @@ where
             cumulative_sum,
         ));
     }
-
     proofs
 }
 
@@ -392,7 +394,7 @@ where
         sels.inv_vanishing.push(Val::<SC>::default());
     }
 
-    let mut alpha_powers = alpha.powers().take(constraint_count).collect_vec();
+    let mut alpha_powers = alpha.powers().collect_n(constraint_count);
     alpha_powers.reverse();
     // alpha powers looks like Vec<EF> ~ Vec<[F; D]>
     // It's useful to also have access to the transpose of this of form [Vec<F>; D].
@@ -693,4 +695,3 @@ where
 //         );
 //     }
 // }
-

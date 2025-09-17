@@ -17,6 +17,7 @@ use crate::{FieldArray, PackedValue, PrimeCharacteristicRing};
 /// # Panics
 /// This will panic if any of the inputs is zero.
 #[instrument(level = "debug", skip_all)]
+#[must_use]
 pub fn batch_multiplicative_inverse<F: Field>(x: &[F]) -> Vec<F> {
     // How many elements to invert in one thread.
     const CHUNK_SIZE: usize = 1024;
@@ -41,7 +42,7 @@ fn batch_multiplicative_inverse_helper<F: Field>(x: &[F], result: &mut [F]) {
 
     let n = x.len();
     assert_eq!(result.len(), n);
-    if n % WIDTH != 0 {
+    if !n.is_multiple_of(WIDTH) {
         // There isn't a very clean way to do this with FieldArray; for now just do it in serial.
         // Another simple (though suboptimal) workaround would be to make two separate calls, one
         // for the packed part and one for the remainder.

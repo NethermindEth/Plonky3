@@ -3,18 +3,21 @@ use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::iter::{Product, Sum};
-use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use core::{array, fmt, iter};
 
 use num_bigint::BigUint;
 use p3_field::exponentiation::exp_1717986917;
 use p3_field::integers::QuotientMap;
+use p3_field::op_assign_macros::{
+    impl_add_assign, impl_div_methods, impl_mul_methods, impl_sub_assign,
+};
 use p3_field::{
     Field, InjectiveMonomial, Packable, PermutationMonomial, PrimeCharacteristicRing, PrimeField,
     PrimeField32, PrimeField64, RawDataSerializable, halve_u32, impl_raw_serializable_primefield32,
     quotient_map_large_iint, quotient_map_large_uint, quotient_map_small_int,
 };
-use p3_util::flatten_to_base;
+use p3_util::{flatten_to_base, gcd_inversion_prime_field_32};
 use rand::Rng;
 use rand::distr::{Distribution, StandardUniform};
 use serde::de::Error;
@@ -26,6 +29,7 @@ const P: u32 = (1 << 31) - 1;
 /// The prime field `F_p` where `p = 2^31 - 1`.
 #[derive(Copy, Clone, Default)]
 #[repr(transparent)] // Important for reasoning about memory layout.
+#[must_use]
 pub struct Mersenne31 {
     /// Not necessarily canonical, but must fit in 31 bits.
     pub(crate) value: u32,
@@ -70,6 +74,44 @@ impl Mersenne31 {
         }
         output
     }
+
+    /// Precomputed table of generators for two-adic subgroups of the degree two extension field over Mersenne31.
+    /// The `i`'th element is a generator of the subgroup of order `2^i`.
+    pub const EXT_TWO_ADIC_GENERATORS: [[Self; 2]; 33] = [
+        [Self::ONE, Self::ZERO],
+        [Self::new(2_147_483_646), Self::new(0)],
+        [Self::new(0), Self::new(2_147_483_646)],
+        [Self::new(32_768), Self::new(2_147_450_879)],
+        [Self::new(590_768_354), Self::new(978_592_373)],
+        [Self::new(1_179_735_656), Self::new(1_241_207_368)],
+        [Self::new(1_567_857_810), Self::new(456_695_729)],
+        [Self::new(1_774_253_895), Self::new(1_309_288_441)],
+        [Self::new(736_262_640), Self::new(1_553_669_210)],
+        [Self::new(1_819_216_575), Self::new(1_662_816_114)],
+        [Self::new(1_323_191_254), Self::new(1_936_974_060)],
+        [Self::new(605_622_498), Self::new(1_964_232_216)],
+        [Self::new(343_674_985), Self::new(501_786_993)],
+        [Self::new(1_995_316_534), Self::new(149_306_621)],
+        [Self::new(2_107_600_913), Self::new(1_378_821_388)],
+        [Self::new(541_476_169), Self::new(2_101_081_972)],
+        [Self::new(2_135_874_973), Self::new(483_411_332)],
+        [Self::new(2_097_144_245), Self::new(1_684_033_590)],
+        [Self::new(1_662_322_247), Self::new(670_236_780)],
+        [Self::new(1_172_215_635), Self::new(595_888_646)],
+        [Self::new(241_940_101), Self::new(323_856_519)],
+        [Self::new(1_957_194_259), Self::new(2_139_647_100)],
+        [Self::new(1_957_419_629), Self::new(1_541_039_442)],
+        [Self::new(1_062_045_235), Self::new(1_824_580_421)],
+        [Self::new(1_929_382_196), Self::new(1_664_698_822)],
+        [Self::new(1_889_294_251), Self::new(331_248_939)],
+        [Self::new(1_214_231_414), Self::new(1_646_302_518)],
+        [Self::new(1_765_392_370), Self::new(461_136_547)],
+        [Self::new(1_629_751_483), Self::new(66_485_474)],
+        [Self::new(1_501_355_827), Self::new(1_439_063_420)],
+        [Self::new(509_778_402), Self::new(800_467_507)],
+        [Self::new(311_014_874), Self::new(1_584_694_829)],
+        [Self::new(1_166_849_849), Self::new(1_117_296_306)],
+    ];
 }
 
 impl PartialEq for Mersenne31 {
@@ -171,11 +213,26 @@ impl PrimeCharacteristicRing for Mersenne31 {
     }
 
     #[inline]
+    fn halve(&self) -> Self {
+        Self::new(halve_u32::<P>(self.value))
+    }
+
+    #[inline]
     fn mul_2exp_u64(&self, exp: u64) -> Self {
         // In a Mersenne field, multiplication by 2^k is just a left rotation by k bits.
         let exp = exp % 31;
         let left = (self.value << exp) & ((1 << 31) - 1);
         let right = self.value >> (31 - exp);
+        let rotated = left | right;
+        Self::new(rotated)
+    }
+
+    #[inline]
+    fn div_2exp_u64(&self, exp: u64) -> Self {
+        // In a Mersenne field, division by 2^k is just a right rotation by k bits.
+        let exp = (exp % 31) as u8;
+        let left = self.value >> exp;
+        let right = (self.value << (31 - exp)) & ((1 << 31) - 1);
         let rotated = left | right;
         Self::new(rotated)
     }
@@ -231,27 +288,19 @@ impl Field for Mersenne31 {
     #[cfg(all(
         target_arch = "x86_64",
         target_feature = "avx2",
-        not(all(feature = "nightly-features", target_feature = "avx512f"))
+        not(target_feature = "avx512f")
     ))]
     type Packing = crate::PackedMersenne31AVX2;
-    #[cfg(all(
-        feature = "nightly-features",
-        target_arch = "x86_64",
-        target_feature = "avx512f"
-    ))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
     type Packing = crate::PackedMersenne31AVX512;
     #[cfg(not(any(
         all(target_arch = "aarch64", target_feature = "neon"),
         all(
             target_arch = "x86_64",
             target_feature = "avx2",
-            not(all(feature = "nightly-features", target_feature = "avx512f"))
+            not(target_feature = "avx512f")
         ),
-        all(
-            feature = "nightly-features",
-            target_arch = "x86_64",
-            target_feature = "avx512f"
-        ),
+        all(target_arch = "x86_64", target_feature = "avx512f"),
     )))]
     type Packing = Self;
 
@@ -263,41 +312,17 @@ impl Field for Mersenne31 {
         self.value == 0 || self.value == Self::ORDER_U32
     }
 
-    #[inline]
-    fn div_2exp_u64(&self, exp: u64) -> Self {
-        // In a Mersenne field, division by 2^k is just a right rotation by k bits.
-        let exp = (exp % 31) as u8;
-        let left = self.value >> exp;
-        let right = (self.value << (31 - exp)) & ((1 << 31) - 1);
-        let rotated = left | right;
-        Self::new(rotated)
-    }
-
     fn try_inverse(&self) -> Option<Self> {
         if self.is_zero() {
             return None;
         }
 
-        // From Fermat's little theorem, in a prime field `F_p`, the inverse of `a` is `a^(p-2)`.
-        // Here p-2 = 2147483645 = 1111111111111111111111111111101_2.
-        // Uses 30 Squares + 7 Multiplications => 37 Operations total.
+        // Number of bits in the Mersenne31 prime.
+        const NUM_PRIME_BITS: u32 = 31;
 
-        let p1 = *self;
-        let p101 = p1.exp_power_of_2(2) * p1;
-        let p1111 = p101.square() * p101;
-        let p11111111 = p1111.exp_power_of_2(4) * p1111;
-        let p111111110000 = p11111111.exp_power_of_2(4);
-        let p111111111111 = p111111110000 * p1111;
-        let p1111111111111111 = p111111110000.exp_power_of_2(4) * p11111111;
-        let p1111111111111111111111111111 = p1111111111111111.exp_power_of_2(12) * p111111111111;
-        let p1111111111111111111111111111101 =
-            p1111111111111111111111111111.exp_power_of_2(3) * p101;
-        Some(p1111111111111111111111111111101)
-    }
-
-    #[inline]
-    fn halve(&self) -> Self {
-        Self::new(halve_u32::<P>(self.value))
+        // gcd_inversion returns the inverse multiplied by 2^60 so we need to correct for that.
+        let inverse_i64 = gcd_inversion_prime_field_32::<NUM_PRIME_BITS>(self.value, P);
+        Some(Self::from_int(inverse_i64).div_2exp_u64(60))
     }
 
     #[inline]
@@ -448,27 +473,6 @@ impl Add for Mersenne31 {
     }
 }
 
-impl AddAssign for Mersenne31 {
-    #[inline]
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl Sum for Mersenne31 {
-    #[inline]
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        // This is faster than iter.reduce(|x, y| x + y).unwrap_or(Self::ZERO) for iterators of length >= 6.
-        // It assumes that iter.len() < 2^31.
-
-        // This sum will not overflow so long as iter.len() < 2^33.
-        let sum = iter.map(|x| x.value as u64).sum::<u64>();
-
-        // sum is < 2^62 provided iter.len() < 2^31.
-        from_u62(sum)
-    }
-}
-
 impl Sub for Mersenne31 {
     type Output = Self;
 
@@ -481,13 +485,6 @@ impl Sub for Mersenne31 {
         // Hence we need to remove the most significant bit and subtract 1.
         sub -= over as u32;
         Self::new(sub & Self::ORDER_U32)
-    }
-}
-
-impl SubAssign for Mersenne31 {
-    #[inline]
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = *self - rhs;
     }
 }
 
@@ -512,27 +509,22 @@ impl Mul for Mersenne31 {
     }
 }
 
-impl MulAssign for Mersenne31 {
-    #[inline]
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = *self * rhs;
-    }
-}
+impl_add_assign!(Mersenne31);
+impl_sub_assign!(Mersenne31);
+impl_mul_methods!(Mersenne31);
+impl_div_methods!(Mersenne31, Mersenne31);
 
-impl Product for Mersenne31 {
+impl Sum for Mersenne31 {
     #[inline]
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.reduce(|x, y| x * y).unwrap_or(Self::ONE)
-    }
-}
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        // This is faster than iter.reduce(|x, y| x + y).unwrap_or(Self::ZERO) for iterators of length >= 6.
+        // It assumes that iter.len() < 2^31.
 
-impl Div for Mersenne31 {
-    type Output = Self;
+        // This sum will not overflow so long as iter.len() < 2^33.
+        let sum = iter.map(|x| x.value as u64).sum::<u64>();
 
-    #[inline]
-    #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, rhs: Self) -> Self {
-        self * rhs.inverse()
+        // sum is < 2^62 provided iter.len() < 2^31.
+        from_u62(sum)
     }
 }
 

@@ -401,6 +401,12 @@ mod tests {
     //     );
     // }
 
+    // TODO - bring up to date with the new logup implementation
+    // Remove the final cumulative sum column
+    // Adjust check_multitable_constraints to take multiple airs in the same way prove now does
+    // Retrive the number of interactions from the air builder after eval is run on each air
+    // Sum that many columns of the first row of the permutation trace to get each air's cumulative sum
+    // Once that has been done for all airs, sum them and assert that it equals zero
     #[test]
     fn test_single_row_wraparound_logic() {
         type Val = BabyBear;

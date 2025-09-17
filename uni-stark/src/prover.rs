@@ -21,103 +21,6 @@ use crate::{
     StarkGenericConfig, Val, VerifierConstraintFolder,
 };
 
-#[derive(PartialEq)]
-enum Loc {
-    MulLhs,
-    MulRhs,
-    AddLhs,
-    AddRhs,
-    SubLhs,
-    SubRhs,
-    Neg,
-    Top,
-}
-
-fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, loc: Loc) -> String
-where
-    F: std::fmt::Debug,
-{
-    match expression {
-        SymbolicExpression::Variable(symbolic_variable) => format!(
-            "{}[{}]",
-            match symbolic_variable.entry {
-                Entry::Preprocessed { offset } => format!("Preprocessed{offset}"),
-                Entry::Main { offset } => format!("Main{offset}"),
-                Entry::Permutation { offset } => format!("Permutation{offset}"),
-                Entry::Public => format!("Public"),
-                Entry::Challenge => format!("Challenge"),
-            },
-            symbolic_variable.index
-        ),
-        SymbolicExpression::IsFirstRow => "IsFirstRow".to_string(),
-        SymbolicExpression::IsLastRow => "IsLastRow".to_string(),
-        SymbolicExpression::IsTransition => "IsTransition".to_string(),
-        SymbolicExpression::Constant(x) => format!("constant{x:?}"),
-        SymbolicExpression::Add {
-            x,
-            y,
-            degree_multiple: _,
-        } => {
-            if loc == Loc::MulLhs || loc == Loc::MulRhs || loc == Loc::Neg {
-                format!(
-                    "({} + {})",
-                    symbolic_expression_to_string(x, Loc::AddLhs),
-                    symbolic_expression_to_string(y, Loc::AddRhs),
-                )
-            } else if loc == Loc::SubRhs {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string(x, Loc::SubLhs),
-                    symbolic_expression_to_string(y, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "{} + {}",
-                    symbolic_expression_to_string(x, Loc::AddLhs),
-                    symbolic_expression_to_string(y, Loc::AddRhs),
-                )
-            }
-        }
-        SymbolicExpression::Sub {
-            x,
-            y,
-            degree_multiple: _,
-        } => {
-            if loc == Loc::AddLhs || loc == Loc::AddRhs || loc == Loc::Top {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string(x, Loc::SubLhs),
-                    symbolic_expression_to_string(y, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "({} - {})",
-                    symbolic_expression_to_string(x, Loc::SubLhs),
-                    symbolic_expression_to_string(y, Loc::SubRhs),
-                )
-            }
-        }
-        SymbolicExpression::Neg {
-            x,
-            degree_multiple: _,
-        } => {
-            format!("-{}", symbolic_expression_to_string(x, Loc::Neg))
-        }
-        SymbolicExpression::Mul {
-            x,
-            y,
-            degree_multiple: _,
-        } => {
-            format!(
-                "{} * {}",
-                symbolic_expression_to_string(x, Loc::MulLhs),
-                symbolic_expression_to_string(y, Loc::MulRhs)
-            )
-        }
-    }
-}
-
-//TODO finish blanket implementation
 pub trait QuotientAir<SC>:
     for<'a> Air<LogupInteractionAirBuilder<'a, ProverConstraintFolder<'a, SC>>>
 where
@@ -262,12 +165,6 @@ where
         let log_ext_degree = log_degree + config.is_zk();
 
         let symbolic_constraints = get_symbolic_constraints(air, 0, public_values.len());
-        for (idx, constraint) in symbolic_constraints.iter().enumerate() {
-            println!(
-                "{idx}: {} = 0\n",
-                symbolic_expression_to_string(constraint, Loc::Top)
-            );
-        }
         let constraint_count = symbolic_constraints.len();
         let constraint_degree = symbolic_constraints
             .iter()

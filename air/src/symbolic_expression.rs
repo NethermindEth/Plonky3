@@ -1,13 +1,11 @@
-use alloc::{fmt, format};
 use alloc::rc::Rc;
-use alloc::string::String;
 use core::fmt::Debug;
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use p3_field::{Algebra, Field, InjectiveMonomial, PrimeCharacteristicRing};
 
-use crate::symbolic_variable::{Entry, SymbolicVariable};
+use crate::symbolic_variable::SymbolicVariable;
 
 /// An expression over `SymbolicVariable`s.
 #[derive(Clone, Debug)]
@@ -200,102 +198,6 @@ impl<F: Field, T: Into<Self>> Product<T> for SymbolicExpression<F> {
         iter.map(Into::into)
             .reduce(|x, y| x * y)
             .unwrap_or(Self::ONE)
-    }
-}
-
-// impl <F: Field, EF: ExtensionField<F>> Algebra<SymbolicExpression<F>> for SymbolicExpression<EF> {}
-
-#[derive(PartialEq)]
-enum Loc {
-    MulLhs,
-    MulRhs,
-    AddLhs,
-    AddRhs,
-    SubLhs,
-    SubRhs,
-    Neg,
-    Top
-}
-
-pub fn symbolic_expression_to_string<F>(expression: &SymbolicExpression<F>, scope_name: Option<String>) -> String
-where F : fmt::Display
-{
-    match scope_name {
-        Some(name) => symbolic_expression_to_string_impl(expression, &format!("{name}."), Loc::Top),
-        None => todo!(),
-    }
-    
-}
-
-fn symbolic_expression_to_string_impl<F>(expression: &SymbolicExpression<F>, scoping: &str, loc: Loc) -> String
-    where F : fmt::Display
-{
-    match expression {
-        SymbolicExpression::Variable(symbolic_variable) =>
-            format!(
-                "{scoping}{}",
-                match symbolic_variable.entry {
-                    Entry::Preprocessed { offset } => format!("Preprocessed[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Main { offset } => format!("Main[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Permutation { offset } => format!("Permutation[{}][row+{offset}]", symbolic_variable.index),
-                    Entry::Public => format!("Public[{}]", symbolic_variable.index),
-                    Entry::Challenge => format!("Challenge[{}]", symbolic_variable.index),
-                },
-                
-            ),
-        SymbolicExpression::IsFirstRow => format!("{scoping}IsFirstRow(row)"),
-        SymbolicExpression::IsLastRow => format!("{scoping}IsLastRow(row)"),
-        SymbolicExpression::IsTransition => format!("{scoping}IsTransition(row)"),
-        SymbolicExpression::Constant(x) => format!("{x}"),
-        SymbolicExpression::Add { x, y, degree_multiple: _ } => {
-            if loc == Loc::MulLhs || loc == Loc::MulRhs || loc == Loc::Neg {
-                format!(
-                    "({} + {})",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::AddLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::AddRhs),
-                )
-            } else if loc == Loc::SubRhs {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "{} + {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::AddLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::AddRhs),
-                )
-            }
-        }
-        SymbolicExpression::Sub { x, y, degree_multiple: _ } => {
-            if loc == Loc::AddLhs || loc == Loc::AddRhs || loc == Loc::Top {
-                format!(
-                    "{} - {}",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            } else {
-                format!(
-                    "({} - {})",
-                    symbolic_expression_to_string_impl(x, scoping, Loc::SubLhs),
-                    symbolic_expression_to_string_impl(y, scoping, Loc::SubRhs),
-                )
-            }
-        }
-        SymbolicExpression::Neg { x, degree_multiple: _ } => {
-            format!(
-                "-{}",
-                symbolic_expression_to_string_impl(x, scoping, Loc::Neg)
-            )
-        }
-        SymbolicExpression::Mul { x, y, degree_multiple: _ } => {
-            format!(
-                "{} * {}",
-                symbolic_expression_to_string_impl(x, scoping, Loc::MulLhs),
-                symbolic_expression_to_string_impl(y, scoping, Loc::MulRhs)
-            )
-        }
     }
 }
 

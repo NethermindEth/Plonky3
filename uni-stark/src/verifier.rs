@@ -26,6 +26,14 @@ pub fn verify<SC>(
 where
     SC: StarkGenericConfig,
 {
+    let sum = cumulative_sums
+        .iter()
+        .fold(<SC as StarkGenericConfig>::Challenge::ZERO, |acc, x| acc + *x);
+
+    if sum != <SC as StarkGenericConfig>::Challenge::ZERO {
+        return Err(VerificationError::LogupSumFailed);
+    }
+
     for i in 0..airs.len() {
         let air = &airs[i];
         let proof = &proofs[i];
@@ -258,4 +266,5 @@ pub enum VerificationError<PcsErr> {
     OodEvaluationMismatch,
     /// The FRI batch randomization does not correspond to the ZK setting.
     RandomizationError,
+    LogupSumFailed,
 }

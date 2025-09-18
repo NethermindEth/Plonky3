@@ -233,7 +233,7 @@ mod tests {
     use p3_commit::ExtensionMmcs;
     use p3_dft::Radix2DitParallel;
     use p3_field::{PrimeCharacteristicRing, extension::BinomialExtensionField};
-    use p3_fri::{HidingFriPcs, create_test_fri_params};
+    use p3_fri::{HidingFriPcs, TwoAdicFriPcs, create_test_fri_params};
     use p3_matrix::dense::DenseMatrix;
     use p3_merkle_tree::MerkleTreeHidingMmcs;
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
@@ -446,8 +446,8 @@ mod tests {
         type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
 
         let fri_config = create_test_fri_params(challenge_mmcs, 0);
-        type HidingPcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SmallRng>;
-        let pcs = HidingPcs::new(dft, val_mmcs, fri_config, 4, SmallRng::seed_from_u64(1));
+        type HidingPcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+        let pcs = HidingPcs::new(dft, val_mmcs, fri_config);
         type MyConfig = StarkConfig<HidingPcs, Challenge, Challenger>;
         let challenger = Challenger::new(perm);
         let config = MyConfig::new(pcs, challenger);
@@ -481,6 +481,8 @@ mod tests {
             vec![perm_0 + perm_1, cumulative_sum, perm_1, cumulative_sum],
             2,
         );
+
+        println!("{}", row_permutation.height());
 
         let shuffle_air = ColumnShuffleAir;
         let shuffle_values = vec![val_0 + BabyBear::ONE, val_0];

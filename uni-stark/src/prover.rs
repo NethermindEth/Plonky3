@@ -186,10 +186,15 @@ where
         // TODO: Might be best practice to include other instance data here; see verifier comment.
 
         challenger.observe(trace_commit.clone());
-        challenger.observe_slice(&public_values);
+        challenger.observe_slice(public_values);
 
         //TODO unshadow permutation_trace?
         let permutation_trace_flat = permutation_trace.clone().flatten_to_base();
+        println!(
+            "Flat height: {}\n Domain size: {}",
+            permutation_trace_flat.height(),
+            trace_domain.size()
+        );
         let (permutation_commit, permutation_data) =
             pcs.commit([(trace_domain, permutation_trace_flat)]);
 

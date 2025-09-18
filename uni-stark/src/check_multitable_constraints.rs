@@ -239,7 +239,9 @@ mod tests {
     use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
     use rand::{SeedableRng, rngs::SmallRng};
 
-    use crate::{LogupAir, ProverConstraintFolder, StarkConfig, StarkGenericConfig, Val, prove};
+    use crate::{
+        LogupAir, ProverConstraintFolder, StarkConfig, StarkGenericConfig, Val, prove, verify,
+    };
 
     use super::*;
 
@@ -249,7 +251,7 @@ mod tests {
     ///
     /// This is useful for validating constraint evaluation, transition logic,
     /// and row condition flags (first/last/transition).
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct RowLogicAir<const W: usize>;
 
     struct ColumnShuffleAir;
@@ -487,13 +489,24 @@ mod tests {
         let shuffle_air = ColumnShuffleAir;
         let shuffle_values = vec![val_0 + BabyBear::ONE, val_0];
 
-        prove::<MyConfig>(
+        let (proofs, cumulative_sums): (Vec<_>, Vec<_>) = prove::<MyConfig>(
             &config,
-            &[Box::new(row_air)],
+            &[Box::new(row_air.clone())],
             &[row_main],
             &[row_permutation],
             &[vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]],
-        );
+        )
+        .into_iter()
+        .unzip();
+
+        verify(
+            &config,
+            &[Box::new(row_air)],
+            &proofs,
+            &cumulative_sums,
+            &[vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]],
+        )
+        .unwrap();
 
         // check_multitable_constraints(
         //     &row_air,

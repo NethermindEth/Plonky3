@@ -114,7 +114,7 @@ where
 
         challenger.observe(commitments.permutation_trace.clone());
 
-        let perm_challenges = (0..2)
+        let perm_challenges = (0..3)
             .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
             .collect::<Vec<SC::Challenge>>();
 

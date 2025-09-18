@@ -230,13 +230,13 @@ where
         let permutation_trace_on_quotient_domain =
             pcs.get_evaluations_on_domain(&permutation_data, 0, quotient_domain);
 
-        let perm_challenges = (0..2)
+        let perm_challenges = (0..3)
             .map(|_| challenger.sample_algebra_element::<SC::Challenge>().into())
             .collect::<Vec<PackedChallenge<SC>>>();
 
         let (quotient_values, num_interactions) = quotient_values(
             air,
-            &public_values,
+            public_values,
             trace_domain,
             quotient_domain,
             trace_on_quotient_domain,

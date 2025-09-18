@@ -290,7 +290,7 @@ mod tests {
                 builder.when_transition().assert_eq(b, a + PB::F::ONE);
             }
 
-            let a = vec![top.get(0).unwrap()];
+            let a = vec![top.first().unwrap()];
 
             builder.register_interaction(a.into_iter().cloned(), PB::F::ONE);
 

@@ -59,6 +59,53 @@ impl<F> SymbolicExpression<F> {
     }
 }
 
+impl<F: Copy + Debug> SymbolicExpression<F> {
+    pub fn map<E>(&self, f: &impl Fn(&F) -> E) -> SymbolicExpression<E> {
+        println!("{:?}", self);
+        match self {
+            Self::Variable(v) => SymbolicExpression::<E>::Variable(v.map()),
+            Self::IsFirstRow => SymbolicExpression::<E>::IsFirstRow,
+            Self::IsLastRow => SymbolicExpression::<E>::IsLastRow,
+            Self::IsTransition => SymbolicExpression::<E>::IsTransition,
+            Self::Constant(c) => SymbolicExpression::<E>::Constant(f(c)),
+            &Self::Add {
+                degree_multiple,
+                ref x,
+                ref y,
+            } => SymbolicExpression::<E>::Add {
+                degree_multiple,
+                x: x.map::<E>(f).into(),
+                y: y.map::<E>(f).into(),
+            },
+            &Self::Neg {
+                degree_multiple,
+                ref x,
+            } => SymbolicExpression::<E>::Neg {
+                degree_multiple,
+                x: x.map::<E>(f).into(),
+            },
+            &Self::Mul {
+                degree_multiple,
+                ref x,
+                ref y,
+            } => SymbolicExpression::<E>::Mul {
+                degree_multiple,
+                x: x.map::<E>(f).into(),
+                y: y.map::<E>(f).into(),
+            },
+            &Self::Sub {
+                degree_multiple,
+                ref x,
+                ref y,
+            } => SymbolicExpression::<E>::Sub {
+                degree_multiple,
+                x: x.map::<E>(f).into(),
+                y: y.map::<E>(f).into(),
+            },
+        }
+    }
+}
+
 impl<F: Field> Default for SymbolicExpression<F> {
     fn default() -> Self {
         Self::Constant(F::ZERO)

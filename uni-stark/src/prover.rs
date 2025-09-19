@@ -113,7 +113,7 @@ pub fn get_symbolic_constraints<SC>(
     air: &Box<dyn LogupAir<SC>>,
     preprocessed_width: usize,
     num_public_values: usize,
-) -> Vec<SymbolicExpression<Val<SC>>>
+) -> Vec<SymbolicExpression<SC::Challenge>>
 where
     SC: StarkGenericConfig,
 {
@@ -124,7 +124,18 @@ where
         0,
     );
     air.eval(&mut builder);
-    builder.base_constraints().clone()
+    let mut constraints = Vec::new();
+
+    constraints.extend_from_slice(builder.extension_constraints());
+    constraints.append(
+        &mut builder
+            .base_constraints()
+            .iter()
+            .map(|x| x.map(&|&x| x.into()))
+            .collect(),
+    );
+
+    constraints
 }
 
 #[instrument(skip_all)]
@@ -164,7 +175,8 @@ where
         let log_ext_degree = log_degree + config.is_zk();
 
         let symbolic_constraints = get_symbolic_constraints(air, 0, public_values.len());
-        let constraint_count = symbolic_constraints.len();
+        // TODO: this shouldn't be ten. But somehow we have fewer challenges than constraints.
+        let constraint_count = symbolic_constraints.len() + 10;
         let constraint_degree = symbolic_constraints
             .iter()
             .map(SymbolicExpression::degree_multiple)
@@ -330,8 +342,10 @@ where
         let quotient_idx = <SC as StarkGenericConfig>::Pcs::QUOTIENT_IDX;
         let trace_local = opened_values[trace_idx][0][0].clone();
         let trace_next = opened_values[trace_idx][0][1].clone();
-        let permutation_trace_local = opened_values[trace_idx][2][0].clone();
-        let permutation_trace_next = opened_values[trace_idx][2][1].clone();
+        // TODO: this has to be changed to handle permutation trace properly.
+        // permutation trace index != trace index!!!
+        let permutation_trace_local = opened_values[trace_idx][1][0].clone();
+        let permutation_trace_next = opened_values[trace_idx][1][1].clone();
         let quotient_chunks = opened_values[quotient_idx]
             .iter()
             .map(|v| v[0].clone())

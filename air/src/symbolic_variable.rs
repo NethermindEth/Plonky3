@@ -37,6 +37,16 @@ impl<F> SymbolicVariable<F> {
             Entry::Public | Entry::Challenge => 0,
         }
     }
+
+    pub const fn map<E>(self) -> SymbolicVariable<E> {
+        let Self {
+            entry,
+            index,
+            _phantom,
+        } = self;
+
+        SymbolicVariable::<E>::new(entry, index)
+    }
 }
 
 impl<F: Field> From<SymbolicVariable<F>> for SymbolicExpression<F> {

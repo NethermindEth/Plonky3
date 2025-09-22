@@ -340,12 +340,13 @@ where
         });
         let trace_idx = <SC as StarkGenericConfig>::Pcs::TRACE_IDX;
         let quotient_idx = <SC as StarkGenericConfig>::Pcs::QUOTIENT_IDX;
+        let permutation_idx = <SC as StarkGenericConfig>::Pcs::PERMUTATION_IDX;
         let trace_local = opened_values[trace_idx][0][0].clone();
         let trace_next = opened_values[trace_idx][0][1].clone();
         // TODO: this has to be changed to handle permutation trace properly.
         // permutation trace index != trace index!!!
-        let permutation_trace_local = opened_values[trace_idx][1][0].clone();
-        let permutation_trace_next = opened_values[trace_idx][1][1].clone();
+        let permutation_trace_local = opened_values[permutation_idx][0][0].clone();
+        let permutation_trace_next = opened_values[permutation_idx][0][1].clone();
         let quotient_chunks = opened_values[quotient_idx]
             .iter()
             .map(|v| v[0].clone())

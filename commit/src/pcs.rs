@@ -49,6 +49,9 @@ where
     /// Index of the quotient commitments in the computed opened values.
     const QUOTIENT_IDX: usize = Self::TRACE_IDX + 1;
 
+    /// Index of the permutation commitments in the computed opened values.
+    const PERMUTATION_IDX: usize = Self::TRACE_IDX + 2;
+
     /// This should return a domain such that `Domain::next_point` returns `Some`.
     fn natural_domain_for_degree(&self, degree: usize) -> Self::Domain;
 

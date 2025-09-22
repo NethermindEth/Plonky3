@@ -15,3 +15,6 @@ mod virtual_column;
 
 pub use air::*;
 pub use virtual_column::*;
+
+mod fib_air_test;
+mod add_test;

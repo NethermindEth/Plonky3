@@ -21,50 +21,36 @@ impl<AB: AirBuilder> Air<AB> for Add8Air {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
 
-        let local = 
-            main.row_slice(0).expect("Matrix is empty?");
+        let local = main.row_slice(0).expect("Matrix is empty?");
 
-        // a + b = c + 2^8 * r
-        builder.assert_eq::<<AB as air::AirBuilder>::Expr, <AB as air::AirBuilder>::Expr>(
-            local[0] + local[1],
-            (<AB as air::AirBuilder>::Expr::from(local[3]) * AB::F::from_u32(256)) + local[2],
-        );
+        let pow_of_2 = (0..=8).map(|i| AB::F::from_u64(1 << i)).collect::<Vec<_>>();
+        // a + b = 2^8 * r + c
+        builder.assert_eq(local[0] + local[1], (local[3] * pow_of_2[8]) + local[2]);
 
-        // r^2 - r = 0 
-        builder.assert_eq::<<AB as air::AirBuilder>::Expr, <AB as air::AirBuilder>::Expr>(
-            <AB as air::AirBuilder>::Expr::from(local[3]) * <AB as air::AirBuilder>::Expr::from(local[3]),
-            <AB as air::AirBuilder>::Expr::from(local[3]) 
-        );
-        
+        // r^2 - r = 0
+        builder.assert_eq((local[3]) * (local[3]), (local[3]).into());
+
         // c = c₁ + 2*c₂ + 4*c₃ + ... + 128 * c₇
-        builder.assert_eq::<<AB as air::AirBuilder>::Expr, <AB as air::AirBuilder>::Expr>(
-            <AB as air::AirBuilder>::Expr::from(local[2]),
-            <AB as air::AirBuilder>::Expr::from(local[4]) +  
-            <AB as air::AirBuilder>::Expr::from(local[5]) * AB::F::from_u32(2) +  
-            <AB as air::AirBuilder>::Expr::from(local[6]) * AB::F::from_u32(4) +
-            <AB as air::AirBuilder>::Expr::from(local[7]) * AB::F::from_u32(8) +
-            <AB as air::AirBuilder>::Expr::from(local[8]) * AB::F::from_u32(16) +
-            <AB as air::AirBuilder>::Expr::from(local[9]) * AB::F::from_u32(32) +
-            <AB as air::AirBuilder>::Expr::from(local[10]) * AB::F::from_u32(64) +
-            <AB as air::AirBuilder>::Expr::from(local[11]) * AB::F::from_u32(128)
+        builder.assert_eq(
+            (local[2]).into(),
+            local[4..12]
+                .iter()
+                .enumerate()
+                .map(|(i, cell)| *cell * pow_of_2[i])
+                .sum::<AB::Expr>(),
         );
 
-        // ∀ i, cᵢ² - cᵢ = 0 
-        for i in 0..8 {
-            builder.assert_eq::<<AB as air::AirBuilder>::Expr, <AB as air::AirBuilder>::Expr>(
-                <AB as air::AirBuilder>::Expr::from(local[4 + i]) * <AB as air::AirBuilder>::Expr::from(local[4 + i]),
-                <AB as air::AirBuilder>::Expr::from(local[4 + i])
-            );
+        // ∀ i, cᵢ² - cᵢ = 0
+        for c in &local[4..12] {
+            builder.assert_eq(*c * *c, (*c).into());
         }
-
     }
 }
 
 #[test]
 fn extract_fib() {
     let air = Add8Air {};
-    let mut sbuilder = SymbolicAirBuilder::<BabyBear, BabyBear, ()>::new(0, 2, 0, 0);
+    let mut sbuilder = SymbolicAirBuilder::<BabyBear, BabyBear, ()>::new(0, NUM_ADD_COLS, 0, 0);
     air.eval(&mut sbuilder);
     sbuilder.print_lean_constraints();
 }
-

@@ -503,23 +503,9 @@ mod tests {
             &config,
             &[Box::new(row_air)],
             &proofs,
-            &cumulative_sums,
+            &[BabyBear::ZERO.into()],
             &[vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]],
         )
         .unwrap();
-
-        // check_multitable_constraints(
-        //     &row_air,
-        //     &row_main,
-        //     &row_permutation,
-        //     &vec![val_0 + BabyBear::ONE, val_1 + BabyBear::ONE]
-        // );
-        // check_multitable_constraints(
-        //     &shuffle_air,
-        //     &shuffle_main,
-        //     &shuffle_permutation,
-        //     &vec![]
-        // );
-        // check_cumulative_sum::<BabyBear, _>(&[row_permutation, shuffle_permutation]);
     }
 }

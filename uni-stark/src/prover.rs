@@ -176,7 +176,7 @@ where
 
         let symbolic_constraints = get_symbolic_constraints(air, 0, public_values.len());
         // TODO: this shouldn't be ten. But somehow we have fewer challenges than constraints.
-        let constraint_count = symbolic_constraints.len() + 10;
+        let constraint_count = symbolic_constraints.len() + public_values.len() + 1;
         let constraint_degree = symbolic_constraints
             .iter()
             .map(SymbolicExpression::degree_multiple)

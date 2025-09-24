@@ -274,9 +274,9 @@ where
                     .expect("Permutation trace is not wide enough for number of interactions")
             })
             .sum();
-        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
-            vec![cumulative_sum],
-        ));
+        // challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
+        //     vec![cumulative_sum],
+        // ));
 
         let (quotient_commit, quotient_data) = info_span!("commit to quotient poly chunks")
             .in_scope(|| pcs.commit_quotient(quotient_domain, quotient_flat, quotient_degree));
@@ -338,6 +338,7 @@ where
 
             pcs.open(rounds, &mut challenger)
         });
+
         let trace_idx = <SC as StarkGenericConfig>::Pcs::TRACE_IDX;
         let quotient_idx = <SC as StarkGenericConfig>::Pcs::QUOTIENT_IDX;
         let permutation_idx = <SC as StarkGenericConfig>::Pcs::PERMUTATION_IDX;

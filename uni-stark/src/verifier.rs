@@ -114,19 +114,19 @@ where
 
         challenger.observe(commitments.permutation_trace.clone());
 
-        let perm_challenges = (0..3)
-            .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
-            .collect::<Vec<SC::Challenge>>();
-
         // Get the first Fiat Shamir challenge which will be used to combine all constraint polynomials
         // into a single polynomial.
         //
         // Soundness Error: n/|EF| where n is the number of constraints.
         let alpha: SC::Challenge = challenger.sample_algebra_element();
 
-        challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
-            vec![cumulative_sum],
-        ));
+        let perm_challenges = (0..3)
+            .map(|_| challenger.sample_algebra_element::<SC::Challenge>())
+            .collect::<Vec<SC::Challenge>>();
+
+        // challenger.observe_slice(&<SC as StarkGenericConfig>::Challenge::flatten_to_base(
+        //     vec![cumulative_sum],
+        // ));
 
         challenger.observe(commitments.quotient_chunks.clone());
 
@@ -178,7 +178,7 @@ where
                 .collect_vec(),
             ),
             (
-                commitments.trace.clone(),
+                commitments.permutation_trace.clone(),
                 vec![(
                     trace_domain,
                     vec![

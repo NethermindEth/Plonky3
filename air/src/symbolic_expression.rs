@@ -208,7 +208,7 @@ mod tests {
     use p3_baby_bear::BabyBear;
 
     use super::*;
-    use crate::Entry;
+    use crate::symbolic_variable::Entry;
 
     #[test]
     fn test_symbolic_expression_degree_multiple() {

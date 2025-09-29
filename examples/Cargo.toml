@@ -44,3 +44,10 @@ p3-matrix.workspace = true
 
 tracing-forest = { workspace = true, features = ["ansi", "smallvec"] }
 tracing-subscriber = { workspace = true, features = ["std", "env-filter"] }
+
+[features]
+extraction = ["p3-air/extraction"]
+
+[[example]]
+name = "extraction_add_example"
+required-features = ["extraction"]

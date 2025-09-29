@@ -233,6 +233,21 @@ pub trait PermutationAirBuilder: ExtensionBuilder {
     fn permutation_randomness(&self) -> &[Self::RandomVar];
 }
 
+/// Trait for builders supporting Logup style multiset equality lookup arguments
+pub trait InteractionAirBuilder: AirBuilder {
+    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(
+        &mut self,
+        data: Data,
+        count: Count,
+    );
+}
+
+/// Trait for builders which can combine multiple values together into a single resultant value,
+/// with low liklihood of equality for differing inputs
+pub trait ExtensionBuilderWithRlc: ExtensionBuilder {
+    fn calculate_rlc<Data: Iterator<Item: Into<Self::Expr>>>(&self, data: Data) -> Self::ExprEF;
+}
+
 /// A wrapper around an [`AirBuilder`] that enforces constraints only when a specified condition is met.
 ///
 /// This struct allows selectively applying constraints to certain rows or under certain conditions in the AIR,
@@ -279,6 +294,14 @@ impl<AB: AirBuilder> AirBuilder for FilteredAirBuilder<'_, AB> {
 
     fn assert_zero<I: Into<Self::Expr>>(&mut self, x: I) {
         self.inner.assert_zero(self.condition() * x.into());
+    }
+}
+
+impl<AB: AirBuilderWithPublicValues> AirBuilderWithPublicValues for FilteredAirBuilder<'_, AB> {
+    type PublicVar = AB::PublicVar;
+
+    fn public_values(&self) -> &[Self::PublicVar] {
+        self.inner.public_values()
     }
 }
 

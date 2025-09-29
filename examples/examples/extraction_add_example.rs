@@ -1,5 +1,3 @@
-#![cfg(feature = "extraction")]
-
 use p3_baby_bear::BabyBear;
 use p3_field::*;
 use p3_matrix::Matrix;

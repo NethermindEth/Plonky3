@@ -34,6 +34,9 @@ bincode = { workspace = true, features = ["serde", "alloc"] }
 clap.workspace = true
 rand.workspace = true
 
+[features]
+extraction = ["p3-air/extraction"]
+
 [dev-dependencies]
 p3-baby-bear.workspace = true
 p3-challenger.workspace = true

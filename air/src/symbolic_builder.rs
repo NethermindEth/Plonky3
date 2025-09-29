@@ -8,8 +8,67 @@ use p3_matrix::dense::RowMajorMatrix;
 
 use crate::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, InteractionAirBuilder, PairBuilder, PermutationAirBuilder};
 use crate::symbolic_variable::Entry;
-use crate::symbolic_expression::{symbolic_expression_to_string, SymbolicExpression};
+use crate::symbolic_expression::SymbolicExpression;
 use crate::symbolic_variable::SymbolicVariable;
+
+pub fn symbolic_expression_to_lean_string<F: Field>(x: &SymbolicExpression<F>, scoping: &str, characteristic: Option<u32>) -> String {
+    match x {
+        SymbolicExpression::Variable(symbolic_variable) =>
+            format!(
+                "{scoping}{}",
+                match symbolic_variable.entry {
+                    Entry::Preprocessed{offset}=>format!("(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Main{offset}=>format!("(Circuit.main c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Permutation{offset}=>format!("(Circuit.permutation c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
+                    Entry::Public=>format!("(Circuit.public c (index := {}))",symbolic_variable.index),
+                    Entry::Challenge=>format!("(Circuit.challenge c (index := {}))",symbolic_variable.index),
+                },
+                
+            ),
+        SymbolicExpression::IsFirstRow => format!("(Circuit.isFirstRow c row)"),
+        SymbolicExpression::IsLastRow => format!("(Circuit.isLastRow c row)"),
+        SymbolicExpression::IsTransition => format!("(Circuit.isTransitionRow c row)"),
+        SymbolicExpression::Constant(x) => {
+            let num = str::parse::<u32>(&format!("{x}"));
+            match num {
+                Ok(num) => {
+                    match characteristic {
+                        Some(characteristic) => {
+                            if num >= characteristic {
+                                format!("{x}")
+                            } else if characteristic - num < num {
+                                format!("-{}", characteristic - num)
+                            } else {
+                                format!("{x}")
+                            }
+                        },
+                        None => format!("{x}"),
+                    }
+                },
+                Err(_) => format!("{x}"),
+            }
+        },
+        SymbolicExpression::Add { x, y, degree_multiple: _degree_multiple } => {
+            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            format!("({lhs} + {rhs})")
+        },
+        SymbolicExpression::Sub { x, y, degree_multiple: _degree_multiple } => {
+            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            format!("({lhs} - {rhs})")
+        },
+        SymbolicExpression::Neg { x, degree_multiple: _degree_multiple } => {
+            let leaf = symbolic_expression_to_lean_string(&x, scoping, characteristic);
+            format!("-({leaf})")
+        },
+        SymbolicExpression::Mul { x, y, degree_multiple: _degree_multiple } => {
+            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            format!("({lhs} * {rhs})")
+        },
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
@@ -106,7 +165,7 @@ where
         for (idx, constraint) in self.base_constraints.iter().enumerate() {
             let constraint_text = format!(
                 "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n    {} = 0\n",
-                symbolic_expression_to_string(constraint, "", None)
+                symbolic_expression_to_lean_string(constraint, "", None)
             );
     
             println!("{constraint_text}");
@@ -124,7 +183,7 @@ where
             .interactions
             .iter()
             .map(|interaction| {
-                let multiplicity = symbolic_expression_to_string(
+                let multiplicity = symbolic_expression_to_lean_string(
                         &interaction.multiplicity,
                         "",
                         None
@@ -134,7 +193,7 @@ where
                         interaction
                             .data
                             .iter()
-                            .map(|x| symbolic_expression_to_string(x, "", None))
+                            .map(|x| symbolic_expression_to_lean_string(x, "", None))
                             .join(", ")
                     );
                     format!("({multiplicity}, {data})")
@@ -165,7 +224,7 @@ where
         for (idx, constraint) in self.base_constraints.iter().enumerate() {
             let constraint_text = format!(
                 "{}",
-                symbolic_expression_to_string(constraint, "", None)
+                symbolic_expression_to_lean_string(constraint, "", None)
             );
     
             let simplified_constraint_text = [

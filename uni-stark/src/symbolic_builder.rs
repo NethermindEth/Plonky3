@@ -7,9 +7,9 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_util::log2_ceil_usize;
 use tracing::instrument;
 
-use crate::Entry;
-use crate::symbolic_expression::SymbolicExpression;
-use crate::symbolic_variable::SymbolicVariable;
+use p3_air::symbolic_variable::Entry;
+use p3_air::symbolic_expression::SymbolicExpression;
+use p3_air::symbolic_variable::SymbolicVariable;
 
 #[instrument(name = "infer log of constraint degree", skip_all)]
 pub fn get_log_quotient_degree<F, A>(

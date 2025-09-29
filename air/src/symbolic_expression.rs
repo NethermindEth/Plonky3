@@ -1,13 +1,11 @@
-use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::String;
 use core::fmt::Debug;
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use p3_field::{Algebra, Field, InjectiveMonomial, PrimeCharacteristicRing};
 
-use crate::symbolic_variable::{Entry, SymbolicVariable};
+use crate::symbolic_variable::SymbolicVariable;
 
 /// An expression over `SymbolicVariable`s.
 #[derive(Clone, Debug)]
@@ -200,67 +198,6 @@ impl<F: Field, T: Into<Self>> Product<T> for SymbolicExpression<F> {
         iter.map(Into::into)
             .reduce(|x, y| x * y)
             .unwrap_or(Self::ONE)
-    }
-}
-
-// impl <F: Field, EF: ExtensionField<F>> Algebra<SymbolicExpression<F>> for SymbolicExpression<EF> {}
-
-pub fn symbolic_expression_to_string<F: Field>(x: &SymbolicExpression<F>, scoping: &str, characteristic: Option<u32>) -> String {
-    match x {
-        SymbolicExpression::Variable(symbolic_variable) =>
-            format!(
-                "{scoping}{}",
-                match symbolic_variable.entry {
-                    Entry::Preprocessed{offset}=>format!("(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Main{offset}=>format!("(Circuit.main c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Permutation{offset}=>format!("(Circuit.permutation c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Public=>format!("(Circuit.public c (index := {}))",symbolic_variable.index),
-                    Entry::Challenge=>format!("(Circuit.challenge c (index := {}))",symbolic_variable.index),
-                },
-                
-            ),
-        SymbolicExpression::IsFirstRow => format!("(Circuit.isFirstRow c row)"),
-        SymbolicExpression::IsLastRow => format!("(Circuit.isLastRow c row)"),
-        SymbolicExpression::IsTransition => format!("(Circuit.isTransitionRow c row)"),
-        SymbolicExpression::Constant(x) => {
-            let num = str::parse::<u32>(&format!("{x}"));
-            match num {
-                Ok(num) => {
-                    match characteristic {
-                        Some(characteristic) => {
-                            if num >= characteristic {
-                                format!("{x}")
-                            } else if characteristic - num < num {
-                                format!("-{}", characteristic - num)
-                            } else {
-                                format!("{x}")
-                            }
-                        },
-                        None => format!("{x}"),
-                    }
-                },
-                Err(_) => format!("{x}"),
-            }
-        },
-        SymbolicExpression::Add { x, y, degree_multiple: _degree_multiple } => {
-            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
-            format!("({lhs} + {rhs})")
-        },
-        SymbolicExpression::Sub { x, y, degree_multiple: _degree_multiple } => {
-            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
-            format!("({lhs} - {rhs})")
-        },
-        SymbolicExpression::Neg { x, degree_multiple: _degree_multiple } => {
-            let leaf = symbolic_expression_to_string(&x, scoping, characteristic);
-            format!("-({leaf})")
-        },
-        SymbolicExpression::Mul { x, y, degree_multiple: _degree_multiple } => {
-            let lhs = symbolic_expression_to_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_string(&y, scoping, characteristic);
-            format!("({lhs} * {rhs})")
-        },
     }
 }
 

@@ -9,9 +9,6 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
-[features]
-extraction = []
-
 [dependencies]
 itertools.workspace = true
 p3-baby-bear.workspace = true
@@ -22,3 +19,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 p3-baby-bear.workspace = true
+
+[features]
+extraction = []

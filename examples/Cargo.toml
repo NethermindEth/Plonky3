@@ -34,13 +34,6 @@ bincode = { workspace = true, features = ["serde", "alloc"] }
 clap.workspace = true
 rand.workspace = true
 
-[[example]]
-name = "extraction_add_example"
-required-features = ["extraction"]
-
-[features]
-extraction = ["p3-air/extraction"]
-
 [dev-dependencies]
 p3-baby-bear.workspace = true
 p3-challenger.workspace = true
@@ -51,3 +44,10 @@ p3-matrix.workspace = true
 
 tracing-forest = { workspace = true, features = ["ansi", "smallvec"] }
 tracing-subscriber = { workspace = true, features = ["std", "env-filter"] }
+
+[features]
+extraction = ["p3-air/extraction"]
+
+[[example]]
+name = "extraction_add_example"
+required-features = ["extraction"]

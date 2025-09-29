@@ -1,10 +1,8 @@
+use p3_air::symbolic_builder::SymbolicAirBuilder;
+use p3_air::{Air, AirBuilder, BaseAir};
 use p3_baby_bear::BabyBear;
 use p3_field::*;
 use p3_matrix::Matrix;
-
-use p3_air::{
-    Air, AirBuilder, BaseAir, symbolic_builder::SymbolicAirBuilder,
-};
 
 pub struct Add8Air {}
 
@@ -26,14 +24,14 @@ impl<AB: AirBuilder> Air<AB> for Add8Air {
         let pow_of_2 = (0..=8).map(|i| AB::F::from_u64(1 << i)).collect::<Vec<_>>();
         // a + b = 2^8 * r + c
         builder.assert_eq(
-            local[0].clone() + local[1].clone(), 
-            (local[3].clone() * pow_of_2[8].clone()) + local[2].clone()
+            local[0].clone() + local[1].clone(),
+            (local[3].clone() * pow_of_2[8].clone()) + local[2].clone(),
         );
 
         // r^2 - r = 0
         builder.assert_eq(
-            (local[3].clone()) * (local[3].clone()), 
-            (local[3].clone()).into()
+            (local[3].clone()) * (local[3].clone()),
+            (local[3].clone()).into(),
         );
 
         // c = c₁ + 2*c₂ + 4*c₃ + ... + 128 * c₇
@@ -48,10 +46,7 @@ impl<AB: AirBuilder> Air<AB> for Add8Air {
 
         // ∀ i, cᵢ² - cᵢ = 0
         for c in &local[4..12] {
-            builder.assert_eq(
-                c.clone() * c.clone(), 
-                c.clone().into()
-            );
+            builder.assert_eq(c.clone() * c.clone(), c.clone().into());
         }
     }
 }

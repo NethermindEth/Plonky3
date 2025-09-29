@@ -2,71 +2,100 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-
 use p3_field::{Algebra, ExtensionField, Field};
 use p3_matrix::dense::RowMajorMatrix;
 
-use crate::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, InteractionAirBuilder, PairBuilder, PermutationAirBuilder};
-use crate::symbolic_variable::Entry;
 use crate::symbolic_expression::SymbolicExpression;
-use crate::symbolic_variable::SymbolicVariable;
+use crate::symbolic_variable::{Entry, SymbolicVariable};
+use crate::{
+    AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, InteractionAirBuilder, PairBuilder,
+    PermutationAirBuilder,
+};
 
-pub fn symbolic_expression_to_lean_string<F: Field>(x: &SymbolicExpression<F>, scoping: &str, characteristic: Option<u32>) -> String {
+pub fn symbolic_expression_to_lean_string<F: Field>(
+    x: &SymbolicExpression<F>,
+    scoping: &str,
+    characteristic: Option<u32>,
+) -> String {
     match x {
-        SymbolicExpression::Variable(symbolic_variable) =>
-            format!(
-                "{scoping}{}",
-                match symbolic_variable.entry {
-                    Entry::Preprocessed{offset}=>format!("(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Main{offset}=>format!("(Circuit.main c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Permutation{offset}=>format!("(Circuit.permutation c (column := {}) (row := row) (rotation := {offset}))",symbolic_variable.index),
-                    Entry::Public=>format!("(Circuit.public c (index := {}))",symbolic_variable.index),
-                    Entry::Challenge=>format!("(Circuit.challenge c (index := {}))",symbolic_variable.index),
-                },
-                
-            ),
+        SymbolicExpression::Variable(symbolic_variable) => format!(
+            "{scoping}{}",
+            match symbolic_variable.entry {
+                Entry::Preprocessed { offset } => format!(
+                    "(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",
+                    symbolic_variable.index
+                ),
+                Entry::Main { offset } => format!(
+                    "(Circuit.main c (column := {}) (row := row) (rotation := {offset}))",
+                    symbolic_variable.index
+                ),
+                Entry::Permutation { offset } => format!(
+                    "(Circuit.permutation c (column := {}) (row := row) (rotation := {offset}))",
+                    symbolic_variable.index
+                ),
+                Entry::Public =>
+                    format!("(Circuit.public c (index := {}))", symbolic_variable.index),
+                Entry::Challenge => format!(
+                    "(Circuit.challenge c (index := {}))",
+                    symbolic_variable.index
+                ),
+            },
+        ),
         SymbolicExpression::IsFirstRow => format!("(Circuit.isFirstRow c row)"),
         SymbolicExpression::IsLastRow => format!("(Circuit.isLastRow c row)"),
         SymbolicExpression::IsTransition => format!("(Circuit.isTransitionRow c row)"),
         SymbolicExpression::Constant(x) => {
             let num = str::parse::<u32>(&format!("{x}"));
             match num {
-                Ok(num) => {
-                    match characteristic {
-                        Some(characteristic) => {
-                            if num >= characteristic {
-                                format!("{x}")
-                            } else if characteristic - num < num {
-                                format!("-{}", characteristic - num)
-                            } else {
-                                format!("{x}")
-                            }
-                        },
-                        None => format!("{x}"),
+                Ok(num) => match characteristic {
+                    Some(characteristic) => {
+                        if num >= characteristic {
+                            format!("{x}")
+                        } else if characteristic - num < num {
+                            format!("-{}", characteristic - num)
+                        } else {
+                            format!("{x}")
+                        }
                     }
+                    None => format!("{x}"),
                 },
                 Err(_) => format!("{x}"),
             }
-        },
-        SymbolicExpression::Add { x, y, degree_multiple: _degree_multiple } => {
+        }
+        SymbolicExpression::Add {
+            x,
+            y,
+            degree_multiple: _degree_multiple,
+        } => {
             let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
             let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
             format!("({lhs} + {rhs})")
-        },
-        SymbolicExpression::Sub { x, y, degree_multiple: _degree_multiple } => {
+        }
+        SymbolicExpression::Sub {
+            x,
+            y,
+            degree_multiple: _degree_multiple,
+        } => {
             let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
             let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
             format!("({lhs} - {rhs})")
-        },
-        SymbolicExpression::Neg { x, degree_multiple: _degree_multiple } => {
+        }
+        SymbolicExpression::Neg {
+            x,
+            degree_multiple: _degree_multiple,
+        } => {
             let leaf = symbolic_expression_to_lean_string(&x, scoping, characteristic);
             format!("-({leaf})")
-        },
-        SymbolicExpression::Mul { x, y, degree_multiple: _degree_multiple } => {
+        }
+        SymbolicExpression::Mul {
+            x,
+            y,
+            degree_multiple: _degree_multiple,
+        } => {
             let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
             let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
             format!("({lhs} * {rhs})")
-        },
+        }
     }
 }
 
@@ -102,9 +131,14 @@ pub struct SymbolicAirBuilder<F, EF, Challenge> {
 impl<F, EF, Challenge> SymbolicAirBuilder<F, EF, Challenge>
 where
     F: Clone + Send + Sync,
-    EF: Clone + Send + Sync
+    EF: Clone + Send + Sync,
 {
-    pub fn new(preprocessed_width: usize, width: usize, num_public_values: usize, num_challenges: usize) -> Self {
+    pub fn new(
+        preprocessed_width: usize,
+        width: usize,
+        num_public_values: usize,
+        num_challenges: usize,
+    ) -> Self {
         let prep_values = [0, 1]
             .into_iter()
             .flat_map(|offset| {
@@ -121,7 +155,8 @@ where
         let permutation_values = [0, 1]
             .into_iter()
             .flat_map(|offset| {
-                (0..width).map(move |index| SymbolicVariable::new(Entry::Permutation { offset }, index))
+                (0..width)
+                    .map(move |index| SymbolicVariable::new(Entry::Permutation { offset }, index))
             })
             .collect();
         let public_values = (0..num_public_values)
@@ -158,7 +193,7 @@ where
 impl<F, EF, Challenge> SymbolicAirBuilder<F, EF, Challenge>
 where
     F: Field,
-    EF: Field
+    EF: Field,
 {
     fn print_lean_base_constraints(&self) {
         println!("--Base constraints---");
@@ -167,7 +202,7 @@ where
                 "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n    {} = 0\n",
                 symbolic_expression_to_lean_string(constraint, "", None)
             );
-    
+
             println!("{constraint_text}");
         }
     }
@@ -183,26 +218,27 @@ where
             .interactions
             .iter()
             .map(|interaction| {
-                let multiplicity = symbolic_expression_to_lean_string(
-                        &interaction.multiplicity,
-                        "",
-                        None
-                    );
-                    let data = format!(
-                        "[{}]",
-                        interaction
-                            .data
-                            .iter()
-                            .map(|x| symbolic_expression_to_lean_string(x, "", None))
-                            .join(", ")
-                    );
-                    format!("({multiplicity}, {data})")
+                let multiplicity =
+                    symbolic_expression_to_lean_string(&interaction.multiplicity, "", None);
+                let data = format!(
+                    "[{}]",
+                    interaction
+                        .data
+                        .iter()
+                        .map(|x| symbolic_expression_to_lean_string(x, "", None))
+                        .join(", ")
+                );
+                format!("({multiplicity}, {data})")
             })
             .join(", ");
 
         println!("  @[simp]");
-        println!("  def constrain_interactions {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) :=");
-        println!("    Circuit.bus c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])");
+        println!(
+            "  def constrain_interactions {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) :="
+        );
+        println!(
+            "    Circuit.bus c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])"
+        );
     }
 
     fn simplification_proof() -> String {
@@ -216,7 +252,8 @@ where
             "  simp [plonky3_encapsulation, NAME_constraint_and_interaction_simplification]",
             "  simp only [NAME_constraint_and_interaction_simplification] at h",
             "  exact h",
-        ].join("\n")
+        ]
+        .join("\n")
     }
 
     fn print_lean_constraint_simplification(&self) {
@@ -226,25 +263,27 @@ where
                 "{}",
                 symbolic_expression_to_lean_string(constraint, "", None)
             );
-    
+
             let simplified_constraint_text = [
                 format!("@[NAME_constraint_and_interaction_simplification]"),
                 format!("def constraint_{idx} (air : Valid_NAME F ExtF) (row : ℕ) : Prop :="),
-                format!("  sorry")
-            ].join("\n");
-    
+                format!("  sorry"),
+            ]
+            .join("\n");
+
             let simplified_of_extracted = [
                 format!("@[NAME_air_simplification]"),
                 format!("lemma constraint_{idx}_of_extraction"),
                 format!("    (air : Valid_NAME F ExtF) (row : ℕ)"),
-                format!(": NAME.extraction.constraint_{idx} air row ↔ constraint_{idx} air row := by"),
-                Self::simplification_proof()
-            ].join("\n");
-    
-            let output_text = format!(
-                "{simplified_constraint_text}\n\n{simplified_of_extracted}"
-            );
-    
+                format!(
+                    ": NAME.extraction.constraint_{idx} air row ↔ constraint_{idx} air row := by"
+                ),
+                Self::simplification_proof(),
+            ]
+            .join("\n");
+
+            let output_text = format!("{simplified_constraint_text}\n\n{simplified_of_extracted}");
+
             if constraint_text.contains("Circuit.permutation") {
                 let commented = output_text
                     .split("\n")
@@ -263,9 +302,10 @@ where
             let simplified_constraint_text = [
                 format!("@[NAME_constraint_and_interaction_simplification]"),
                 format!("def constrain_interactions (air : Valid_NAME F ExtF) : Prop :="),
-                format!("  sorry")
-            ].join("\n");
-    
+                format!("  sorry"),
+            ]
+            .join("\n");
+
             let simplified_of_extracted = [
                 format!("@[NAME_air_simplification]"),
                 format!("lemma constrain_interactions_of_extraction"),
@@ -273,26 +313,22 @@ where
                 format!(": NAME.extraction.constrain_interactions air ↔ constrain_interactions air := by"),
                 Self::simplification_proof()
             ].join("\n");
-    
-            let output_text = format!(
-                "{simplified_constraint_text}\n\n{simplified_of_extracted}"
-            );
-    
+
+            let output_text = format!("{simplified_constraint_text}\n\n{simplified_of_extracted}");
+
             println!("{output_text}\n");
         }
     }
 
     fn print_lean_all_hold(&self) {
         println!("-----All hold definitions-----------");
-    
+
         let num_constraints = self.base_constraints.len();
-    
+
         let extracted_row_constraint_list = (0..num_constraints)
-            .map(|idx| {
-                format!("    NAME.extraction.constraint_{idx} air row,")
-            })
+            .map(|idx| format!("    NAME.extraction.constraint_{idx} air row,"))
             .join("\n");
-    
+
         let extract_row_constraint_list_def = [
             format!("@[simp]"),
             format!("def extracted_row_constraint_list"),
@@ -303,8 +339,9 @@ where
             format!("  ["),
             extracted_row_constraint_list,
             format!("  ]"),
-        ].join("\n");
-    
+        ]
+        .join("\n");
+
         let all_hold_def = [
             "@[simp]",
             "def allHold",
@@ -315,14 +352,13 @@ where
             ": Prop :=",
             "  NAME.extraction.constrain_interactions air ∧",
             "  List.Forall (·) (extracted_row_constraint_list air row)",
-        ].join("\n");
-    
+        ]
+        .join("\n");
+
         let row_constraint_list = (0..num_constraints)
-            .map(|idx| {
-                format!("    constraint_{idx} air row,")
-            })
+            .map(|idx| format!("    constraint_{idx} air row,"))
             .join("\n");
-    
+
         let row_constraint_list_def = [
             format!("@[simp]"),
             format!("def row_constraint_list"),
@@ -333,8 +369,9 @@ where
             format!("  ["),
             row_constraint_list,
             format!("  ]"),
-        ].join("\n");
-    
+        ]
+        .join("\n");
+
         let all_hold_simplified = [
             "@[simp]",
             "def allHold_simplified",
@@ -345,8 +382,9 @@ where
             ": Prop :=",
             "  constrain_interactions air ∧",
             "  List.Forall (·) (row_constraint_list air row)",
-        ].join("\n");
-    
+        ]
+        .join("\n");
+
         let all_hold_simplified_of_all_hold = [
             "lemma allHold_simplified_of_allHold",
             "  [Field ExtF]",
@@ -362,16 +400,18 @@ where
             "  . simp only [extracted_row_constraint_list,",
             "              row_constraint_list,",
             "              NAME_air_simplification]",
-        ].join("\n");
-    
+        ]
+        .join("\n");
+
         let all_hold_section = [
             extract_row_constraint_list_def,
             all_hold_def,
             row_constraint_list_def,
             all_hold_simplified,
-            all_hold_simplified_of_all_hold
-        ].join("\n\n");
-    
+            all_hold_simplified_of_all_hold,
+        ]
+        .join("\n\n");
+
         println!("{all_hold_section}");
     }
 
@@ -382,7 +422,7 @@ where
 
         self.print_lean_constraint_simplification();
         self.print_lean_interaction_simplification();
-        
+
         self.print_lean_all_hold();
         println!("------");
     }
@@ -390,7 +430,7 @@ where
 
 impl<F, EF, Challenge> AirBuilder for SymbolicAirBuilder<F, EF, Challenge>
 where
-    F: Field
+    F: Field,
 {
     type F = F;
     type Expr = SymbolicExpression<F>;
@@ -425,7 +465,8 @@ where
 }
 
 impl<F, EF, Challenge> AirBuilderWithPublicValues for SymbolicAirBuilder<F, EF, Challenge>
-where F: Field
+where
+    F: Field,
 {
     type PublicVar = SymbolicVariable<F>;
     fn public_values(&self) -> &[Self::PublicVar] {
@@ -434,7 +475,8 @@ where F: Field
 }
 
 impl<F, EF, Challenge> PairBuilder for SymbolicAirBuilder<F, EF, Challenge>
-where F: Field
+where
+    F: Field,
 {
     fn preprocessed(&self) -> Self::M {
         self.preprocessed.clone()
@@ -445,7 +487,7 @@ impl<F, EF, Challenge> ExtensionBuilder for SymbolicAirBuilder<F, EF, Challenge>
 where
     F: Field,
     EF: ExtensionField<F>,
-    SymbolicExpression<EF> : Algebra<SymbolicExpression<F>>
+    SymbolicExpression<EF>: Algebra<SymbolicExpression<F>>,
 {
     type EF = EF;
 
@@ -455,16 +497,17 @@ where
 
     fn assert_zero_ext<I>(&mut self, x: I)
     where
-        I: Into<Self::ExprEF> {
+        I: Into<Self::ExprEF>,
+    {
         self.extension_constraints.push(x.into())
     }
 }
 
-impl <F, EF, Challenge> PermutationAirBuilder for SymbolicAirBuilder<F, EF, Challenge>
+impl<F, EF, Challenge> PermutationAirBuilder for SymbolicAirBuilder<F, EF, Challenge>
 where
     F: Field,
     EF: ExtensionField<F>,
-    SymbolicExpression<EF> : Algebra<SymbolicExpression<F>>,
+    SymbolicExpression<EF>: Algebra<SymbolicExpression<F>>,
     SymbolicExpression<EF>: From<SymbolicVariable<Challenge>>,
     Challenge: Copy,
 {
@@ -481,14 +524,18 @@ where
     }
 }
 
-impl <F, EF, Challenge> InteractionAirBuilder for SymbolicAirBuilder<F, EF, Challenge>
+impl<F, EF, Challenge> InteractionAirBuilder for SymbolicAirBuilder<F, EF, Challenge>
 where
-    F: Field
+    F: Field,
 {
-    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(&mut self, data: Data, count: Count) {
+    fn register_interaction<Data: Iterator<Item: Into<Self::Expr>>, Count: Into<Self::Expr>>(
+        &mut self,
+        data: Data,
+        count: Count,
+    ) {
         self.interactions.push(Interaction {
             data: data.map(|x| x.into()).collect(),
-            multiplicity: count.into()
+            multiplicity: count.into(),
         });
     }
 }

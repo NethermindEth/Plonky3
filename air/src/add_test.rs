@@ -48,7 +48,7 @@ impl<AB: AirBuilder> Air<AB> for Add8Air {
 }
 
 #[test]
-fn extract_fib() {
+fn extract_add8() {
     let air = Add8Air {};
     let mut sbuilder = SymbolicAirBuilder::<BabyBear, BabyBear, ()>::new(0, NUM_ADD_COLS, 0, 0);
     air.eval(&mut sbuilder);

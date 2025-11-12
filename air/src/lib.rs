@@ -18,3 +18,4 @@ pub use virtual_column::*;
 
 mod fib_air_test;
 mod add_test;
+mod is_zero_test;

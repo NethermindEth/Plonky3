@@ -1,3 +1,7 @@
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
+
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -12,14 +16,148 @@ use crate::{
     PermutationAirBuilder,
 };
 
+fn indent(code: String, indentation: &str) -> String {
+    code.split("\n").map(|line| format!("{indentation}{line}")).join("\n")
+}
+
+fn symbolic_expression_size<F>(x: &SymbolicExpression<F>) -> usize {
+    match x {
+        SymbolicExpression::Variable(_) => 1,
+        SymbolicExpression::IsFirstRow => 1,
+        SymbolicExpression::IsLastRow => 1,
+        SymbolicExpression::IsTransition => 1,
+        SymbolicExpression::Constant(_) => 1,
+        SymbolicExpression::Add { x, y, degree_multiple } => {
+            1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
+        },
+        SymbolicExpression::Sub { x, y, degree_multiple } => {
+            1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
+        },
+        SymbolicExpression::Neg { x, degree_multiple } => {
+            1 + symbolic_expression_size(&x)
+        },
+        SymbolicExpression::Mul { x, y, degree_multiple } => {
+            1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
+        },
+    }
+}
+
+fn sort_by_argument_order<F: Field>(lhs: &SymbolicExpression<F>, rhs: &SymbolicExpression<F>) -> Ordering {
+    match (lhs, rhs) {
+        (SymbolicExpression::Variable(lhs), SymbolicExpression::Variable(rhs)) => match (lhs.entry, rhs.entry) {
+            (Entry::Preprocessed { offset: l }, Entry::Preprocessed { offset: r }) => lhs.index.cmp(&rhs.index).then(l.cmp(&r)),
+            (Entry::Preprocessed { offset: _ }, Entry::Main { offset: _ }) => Ordering::Greater,
+            (Entry::Preprocessed { offset: _ }, Entry::Permutation { offset: _ }) => Ordering::Greater,
+            (Entry::Preprocessed { offset: _ }, Entry::Public) => Ordering::Greater,
+            (Entry::Preprocessed { offset: _ }, Entry::Challenge) => Ordering::Greater,
+            (Entry::Main { offset: _ }, Entry::Preprocessed { offset: _ }) => Ordering::Less,
+            (Entry::Main { offset: l }, Entry::Main { offset: r }) => lhs.index.cmp(&rhs.index).then(l.cmp(&r)),
+            (Entry::Main { offset: _ }, Entry::Permutation { offset: _ }) => Ordering::Greater,
+            (Entry::Main { offset: _ }, Entry::Public) => Ordering::Greater,
+            (Entry::Main { offset: _ }, Entry::Challenge) => Ordering::Greater,
+            (Entry::Permutation { offset: _ }, Entry::Preprocessed { offset: _ }) => Ordering::Less,
+            (Entry::Permutation { offset: _ }, Entry::Main { offset: _ }) => Ordering::Less,
+            (Entry::Permutation { offset: l }, Entry::Permutation { offset: r }) => lhs.index.cmp(&rhs.index).then(l.cmp(&r)),
+            (Entry::Permutation { offset: _ }, Entry::Public) => Ordering::Greater,
+            (Entry::Permutation { offset: _ }, Entry::Challenge) => Ordering::Greater,
+            (Entry::Public, Entry::Preprocessed { offset: _ }) => Ordering::Less,
+            (Entry::Public, Entry::Main { offset: _ }) => Ordering::Less,
+            (Entry::Public, Entry::Permutation { offset: _ }) => Ordering::Less,
+            (Entry::Public, Entry::Public) => lhs.index.cmp(&rhs.index),
+            (Entry::Public, Entry::Challenge) => Ordering::Greater,
+            (Entry::Challenge, Entry::Preprocessed { offset: _ }) => Ordering::Less,
+            (Entry::Challenge, Entry::Main { offset: _ }) => Ordering::Less,
+            (Entry::Challenge, Entry::Permutation { offset: _ }) => Ordering::Less,
+            (Entry::Challenge, Entry::Public) => Ordering::Less,
+            (Entry::Challenge, Entry::Challenge) => lhs.index.cmp(&rhs.index),
+        },
+        (SymbolicExpression::Variable(_), _) => Ordering::Less,
+        (SymbolicExpression::IsFirstRow, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::IsFirstRow, SymbolicExpression::IsFirstRow) => Ordering::Equal,
+        (SymbolicExpression::IsFirstRow, _) => Ordering::Less,
+        (SymbolicExpression::IsLastRow, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::IsLastRow, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::IsLastRow, SymbolicExpression::IsLastRow) => Ordering::Equal,
+        (SymbolicExpression::IsLastRow, _) => Ordering::Less,
+        (SymbolicExpression::IsTransition, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::IsTransition, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::IsTransition, SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::IsTransition, SymbolicExpression::IsTransition) => Ordering::Equal,
+        (SymbolicExpression::IsTransition, _) => Ordering::Less,
+        (SymbolicExpression::Constant(_), SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::Constant(_), SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::Constant(_), SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::Constant(_), SymbolicExpression::IsTransition) => Ordering::Greater,
+        (SymbolicExpression::Constant(l), SymbolicExpression::Constant(r)) => {
+            println!("{l}");
+            println!("{r}");
+            l.to_string().cmp(&r.to_string())
+        },
+        (SymbolicExpression::Constant(_), _) => Ordering::Less,
+
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsTransition) => Ordering::Greater,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Constant(_)) => Ordering::Greater,
+        (SymbolicExpression::Add { x: lx, y: ly, degree_multiple: ld }, SymbolicExpression::Add { x: rx, y: ry, degree_multiple: rd }) => {
+            sort_by_argument_order(&lx, &rx)
+                .then(sort_by_argument_order(&ly, &ry))
+                .then(ld.cmp(&rd))
+        },
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }) => Ordering::Less,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Neg { x: _, degree_multiple: _ }) => Ordering::Less,
+        (SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }) => Ordering::Less,
+
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsTransition) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Constant(_)) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Sub { x: lx, y: ly, degree_multiple: ld }, SymbolicExpression::Sub { x: rx, y: ry, degree_multiple: rd }) => {
+            sort_by_argument_order(&lx, &rx)
+                .then(sort_by_argument_order(&ly, &ry))
+                .then(ld.cmp(&rd))
+        },
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Neg { x: _, degree_multiple: _ }) => Ordering::Less,
+        (SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }) => Ordering::Less,
+
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::IsTransition) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::Constant(_)) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Neg { x: lx, degree_multiple: ld }, SymbolicExpression::Neg { x: rx, degree_multiple: rd }) => {
+            sort_by_argument_order(&lx, &rx)
+                .then(ld.cmp(&rd))
+        },
+        (SymbolicExpression::Neg { x: _, degree_multiple: _ }, SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }) => Ordering::Less,
+
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Variable(_)) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsFirstRow) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsLastRow) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::IsTransition) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Constant(_)) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Add { x: _, y: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Sub { x: _, y: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: _, y: _, degree_multiple: _ }, SymbolicExpression::Neg { x: _, degree_multiple: _ }) => Ordering::Greater,
+        (SymbolicExpression::Mul { x: lx, y: ly, degree_multiple: ld }, SymbolicExpression::Mul { x: rx, y: ry, degree_multiple: rd }) => {
+            sort_by_argument_order(&lx, &rx)
+                .then(sort_by_argument_order(&ly, &ry))
+                .then(ld.cmp(&rd))
+        },
+    }
+}
+
 pub fn symbolic_expression_to_lean_string<F: Field>(
     x: &SymbolicExpression<F>,
-    scoping: &str,
     characteristic: Option<u32>,
 ) -> String {
     match x {
-        SymbolicExpression::Variable(symbolic_variable) => format!(
-            "{scoping}{}",
+        SymbolicExpression::Variable(symbolic_variable) =>
             match symbolic_variable.entry {
                 Entry::Preprocessed { offset } => format!(
                     "(Circuit.preprocessed c (column := {}) (row := row) (rotation := {offset}))",
@@ -40,7 +178,6 @@ pub fn symbolic_expression_to_lean_string<F: Field>(
                     symbolic_variable.index
                 ),
             },
-        ),
         SymbolicExpression::IsFirstRow => format!("(Circuit.isFirstRow c row)"),
         SymbolicExpression::IsLastRow => format!("(Circuit.isLastRow c row)"),
         SymbolicExpression::IsTransition => format!("(Circuit.isTransitionRow c row)"),
@@ -67,8 +204,8 @@ pub fn symbolic_expression_to_lean_string<F: Field>(
             y,
             degree_multiple: _degree_multiple,
         } => {
-            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            let lhs = symbolic_expression_to_lean_string(&x, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, characteristic);
             format!("({lhs} + {rhs})")
         }
         SymbolicExpression::Sub {
@@ -76,15 +213,15 @@ pub fn symbolic_expression_to_lean_string<F: Field>(
             y,
             degree_multiple: _degree_multiple,
         } => {
-            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            let lhs = symbolic_expression_to_lean_string(&x, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, characteristic);
             format!("({lhs} - {rhs})")
         }
         SymbolicExpression::Neg {
             x,
             degree_multiple: _degree_multiple,
         } => {
-            let leaf = symbolic_expression_to_lean_string(&x, scoping, characteristic);
+            let leaf = symbolic_expression_to_lean_string(&x, characteristic);
             format!("-({leaf})")
         }
         SymbolicExpression::Mul {
@@ -92,11 +229,253 @@ pub fn symbolic_expression_to_lean_string<F: Field>(
             y,
             degree_multiple: _degree_multiple,
         } => {
-            let lhs = symbolic_expression_to_lean_string(&x, scoping, characteristic);
-            let rhs = symbolic_expression_to_lean_string(&y, scoping, characteristic);
+            let lhs = symbolic_expression_to_lean_string(&x, characteristic);
+            let rhs = symbolic_expression_to_lean_string(&y, characteristic);
             format!("({lhs} * {rhs})")
         }
     }
+}
+
+struct OrderedSymbolicExpression<F: Field>(SymbolicExpression<F>);
+
+impl<F: Field> PartialEq for OrderedSymbolicExpression<F> {
+    fn eq(&self, other: &Self) -> bool {
+        sort_by_argument_order(&self.0, &other.0) == Ordering::Equal
+    }
+}
+
+impl<F: Field> Eq for OrderedSymbolicExpression<F> {   
+}
+
+impl<F: Field> PartialOrd for OrderedSymbolicExpression<F> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(sort_by_argument_order(&self.0, &other.0))
+    }
+}
+
+impl<F: Field> Ord for OrderedSymbolicExpression<F> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        sort_by_argument_order(&self.0, &other.0)
+    }
+}
+
+fn get_symbolic_variable_leaf_string_set<F: Field>(
+    x: &SymbolicExpression<F>,
+) -> BTreeSet<OrderedSymbolicExpression<F>> {
+    match x {
+        SymbolicExpression::Variable(_symbolic_variable) => {
+            let mut set = BTreeSet::new();
+            set.insert(OrderedSymbolicExpression(x.clone()));
+            set
+        },
+        SymbolicExpression::IsFirstRow => {
+            let mut set = BTreeSet::new();
+            set.insert(OrderedSymbolicExpression(x.clone()));
+            set
+        },
+        SymbolicExpression::IsLastRow => {
+            let mut set = BTreeSet::new();
+            set.insert(OrderedSymbolicExpression(x.clone()));
+            set
+        },
+        SymbolicExpression::IsTransition => {
+            let mut set = BTreeSet::new();
+            set.insert(OrderedSymbolicExpression(x.clone()));
+            set
+        },
+        SymbolicExpression::Constant(_) => {
+            let mut set = BTreeSet::new();
+            set.insert(OrderedSymbolicExpression(x.clone()));
+            set
+        },
+        SymbolicExpression::Add { x, y, degree_multiple: _ } => {
+            let mut set = get_symbolic_variable_leaf_string_set(&x);
+            set.append(&mut get_symbolic_variable_leaf_string_set(&y));
+            set
+        },
+        SymbolicExpression::Sub { x, y, degree_multiple: _ } => {
+            let mut set = get_symbolic_variable_leaf_string_set(&x);
+            set.append(&mut get_symbolic_variable_leaf_string_set(&y));
+            set
+        },
+        SymbolicExpression::Neg { x, degree_multiple: _ } => {
+            get_symbolic_variable_leaf_string_set(&x)
+        }
+        SymbolicExpression::Mul { x, y, degree_multiple: _ } => {
+            let mut set = get_symbolic_variable_leaf_string_set(&x);
+            set.append(&mut get_symbolic_variable_leaf_string_set(&y));
+            set
+        },
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum CachedBinaryOp {
+    Add,
+    Sub,
+    Mul
+}
+
+#[derive(Debug, Clone)]
+enum CachedSymbolicExpression {
+    Leaf(String),
+    Neg(usize),
+    Binary{
+        lhs: usize,
+        rhs: usize,
+        op: CachedBinaryOp
+    },
+}
+
+fn cache_symbolic_expression_walk_leaf<F: Field>(
+    x: &SymbolicExpression<F>,
+    characteristic: Option<u32>,
+    cache: &mut Vec<CachedSymbolicExpression>
+) -> usize {
+    let str = symbolic_expression_to_lean_string(&x, None);
+    match cache.iter().find_position(|c| match c {
+        CachedSymbolicExpression::Leaf(cached_str) => str.eq(cached_str),
+        CachedSymbolicExpression::Neg(_) => false,
+        CachedSymbolicExpression::Binary { lhs: _, rhs: _, op: _ } => false,
+    }) {
+        Some((idx, _)) => idx,
+        None => {
+            let cached = CachedSymbolicExpression::Leaf(str);
+            cache.push(cached);
+            cache.len() - 1
+        },
+    }
+}
+
+fn cache_symbolic_expression_walk_binary<F: Field>(
+    lhs: &SymbolicExpression<F>,
+    rhs: &SymbolicExpression<F>,
+    node_op: CachedBinaryOp,
+    characteristic: Option<u32>,
+    cache: &mut Vec<CachedSymbolicExpression>
+) -> usize {
+    let left_child = cache_symbolic_expression_walk(lhs, characteristic, cache);
+    let right_child = cache_symbolic_expression_walk(rhs, characteristic, cache);
+    match cache.iter().find_position(|c| match c {
+        CachedSymbolicExpression::Leaf(_) => false,
+        CachedSymbolicExpression::Neg(_) => false,
+        CachedSymbolicExpression::Binary { lhs, rhs, op } =>
+            *lhs == left_child &&
+            *rhs == right_child &&
+            *op == node_op,
+    }) {
+        Some((idx, _)) => idx,
+        None => {
+            let cached = CachedSymbolicExpression::Binary{
+                lhs: left_child,
+                rhs: right_child,
+                op: node_op,
+            };
+            cache.push(cached);
+            cache.len() - 1
+        },
+    }
+}
+
+fn cache_symbolic_expression_walk<F: Field>(
+    x: &SymbolicExpression<F>,
+    characteristic: Option<u32>,
+    cache: &mut Vec<CachedSymbolicExpression>
+) -> usize {
+    println!("Cache size: {}", cache.len());
+    match x {
+        SymbolicExpression::Variable(_) => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
+        SymbolicExpression::IsFirstRow => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
+        SymbolicExpression::IsLastRow => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
+        SymbolicExpression::IsTransition => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
+        SymbolicExpression::Constant(_) => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
+        SymbolicExpression::Neg { x, degree_multiple: _ } => {
+            let child = cache_symbolic_expression_walk(x, characteristic, cache);
+            match cache.iter().find_position(|c| match c {
+                CachedSymbolicExpression::Leaf(_) => false,
+                CachedSymbolicExpression::Neg(idx) => *idx == child,
+                CachedSymbolicExpression::Binary { lhs: _, rhs: _, op: _ } => false,
+            }) {
+                Some((idx, _)) => idx,
+                None => {
+                    let cached = CachedSymbolicExpression::Neg(child);
+                    cache.push(cached);
+                    cache.len() - 1
+                },
+            }
+        },
+        SymbolicExpression::Add { x, y, degree_multiple: _ } =>
+            cache_symbolic_expression_walk_binary(&x, &y, CachedBinaryOp::Add, characteristic, cache),
+        SymbolicExpression::Sub { x, y, degree_multiple: _ } =>
+            cache_symbolic_expression_walk_binary(&x, &y, CachedBinaryOp::Sub, characteristic, cache),
+        SymbolicExpression::Mul { x, y, degree_multiple: _ } =>
+            cache_symbolic_expression_walk_binary(&x, &y, CachedBinaryOp::Mul, characteristic, cache),
+    }
+}
+
+fn cache_symbolic_expression<F: Field>(
+    x: &SymbolicExpression<F>,
+    characteristic: Option<u32>
+) -> Vec<CachedSymbolicExpression> {
+    println!("Caching");
+    println!("Calculating size:");
+    println!("  {}", symbolic_expression_size(x));
+    let mut cache = Vec::new();
+    let result = cache_symbolic_expression_walk(&x, characteristic, &mut cache);
+    assert!(cache.len() - 1 == result, "Cache symbolic expression returned an index other than the last in the cache");
+    cache
+}
+
+pub fn symbolic_expression_to_condensed_lean_string<F: Field>(
+    x: &SymbolicExpression<F>,
+    characteristic: Option<u32>,
+) -> String {
+
+    let cache = cache_symbolic_expression(x, characteristic);
+
+    println!("Rendering");
+
+    let let_exprs = cache
+        .iter()
+        .enumerate()
+        .map(|(idx, expr)| match expr {
+            CachedSymbolicExpression::Leaf(str) => format!("let x{idx} := {str}"),
+            CachedSymbolicExpression::Neg(child) => format!("let x{idx} := -x{}", child),
+            CachedSymbolicExpression::Binary { lhs, rhs, op } => match op {
+                CachedBinaryOp::Add => format!("let x{idx} := x{} + x{}", lhs, rhs),
+                CachedBinaryOp::Sub => format!("let x{idx} := x{} - x{}", lhs, rhs),
+                CachedBinaryOp::Mul => format!("let x{idx} := x{} * x{}", lhs, rhs),
+            },
+        })
+        .join("\n");
+
+    let final_expr = format!("x{}", cache.len() - 1);
+
+    format!("{let_exprs}\n{final_expr}")
+    
+
+    // let mut str = symbolic_expression_to_lean_string(x, characteristic);
+    // println!("Getting leaves");
+    // let leaves = get_symbolic_variable_leaf_string_set(x)
+    //     .into_iter()
+    //     .map(|leaf| symbolic_expression_to_lean_string(&leaf.0, None))
+    //     .collect_vec();
+    // println!("Got {}", leaves.len());
+    // for (idx, leaf) in leaves.iter().enumerate() {
+    //     println!("Leaf : {leaf}");
+    //     str = str.replace(leaf, &format!("x{idx}"));
+    // }
+    // let params = leaves
+    //     .iter()
+    //     .enumerate()
+    //     .map(|(idx, _)| format!("x{idx}"))
+    //     .join(" ");
+    // let function = format!(
+    //     "(λ ({params} : F) => \n  {str}\n)",
+    // );
+    // let args = indent(leaves.iter().join("\n"), "  ");
+
+    // format!("({function}\n{args}\n)")
 }
 
 #[derive(Clone, Debug)]
@@ -197,10 +576,17 @@ where
 {
     fn print_lean_base_constraints(&self) {
         println!("--Base constraints---");
-        for (idx, constraint) in self.base_constraints.iter().enumerate() {
+        for (idx, constraint) in
+            self
+                .base_constraints
+                .iter()
+                .enumerate()
+                // .skip(138)
+                .take(160) {
+            println!("Printing constraint {idx}");
             let constraint_text = format!(
-                "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n    {} = 0\n",
-                symbolic_expression_to_lean_string(constraint, "", None)
+                "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n{} = 0\n",
+                indent(symbolic_expression_to_condensed_lean_string(constraint, None), "    ")
             );
 
             println!("{constraint_text}");
@@ -219,13 +605,13 @@ where
             .iter()
             .map(|interaction| {
                 let multiplicity =
-                    symbolic_expression_to_lean_string(&interaction.multiplicity, "", None);
+                    symbolic_expression_to_lean_string(&interaction.multiplicity, None);
                 let data = format!(
                     "[{}]",
                     interaction
                         .data
                         .iter()
-                        .map(|x| symbolic_expression_to_lean_string(x, "", None))
+                        .map(|x| symbolic_expression_to_lean_string(x, None))
                         .join(", ")
                 );
                 format!("({multiplicity}, {data})")
@@ -261,7 +647,7 @@ where
         for (idx, constraint) in self.base_constraints.iter().enumerate() {
             let constraint_text = format!(
                 "{}",
-                symbolic_expression_to_lean_string(constraint, "", None)
+                symbolic_expression_to_lean_string(constraint, None)
             );
 
             let simplified_constraint_text = [
@@ -416,14 +802,15 @@ where
     }
 
     pub fn print_lean_constraints(&self) {
+        println!("Num constraints: {}", self.base_constraints.len());
         self.print_lean_base_constraints();
-        self.print_lean_extension_field_constraints_warning();
-        self.print_lean_interactions();
+        // self.print_lean_extension_field_constraints_warning();
+        // self.print_lean_interactions();
 
-        self.print_lean_constraint_simplification();
-        self.print_lean_interaction_simplification();
+        // self.print_lean_constraint_simplification();
+        // self.print_lean_interaction_simplification();
 
-        self.print_lean_all_hold();
+        // self.print_lean_all_hold();
         println!("------");
     }
 }

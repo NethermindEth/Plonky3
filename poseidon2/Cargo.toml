@@ -30,3 +30,6 @@ criterion.workspace = true
 [[bench]]
 name = "poseidon2"
 harness = false
+
+[[example]]
+name = "poseidon2_helper"

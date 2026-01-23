@@ -59,8 +59,8 @@ clean:
 	rm -f $(OUTPUT_LIB)
 	rm -f *.o
 
-# Install to feature-B directory
+# Install to Poseidon.lean directory
 install: $(OUTPUT_LIB)
-	cp $(OUTPUT_LIB) ../../feature-B/
+	cp $(OUTPUT_LIB) ../../Poseidon.lean/
 
 .PHONY: install

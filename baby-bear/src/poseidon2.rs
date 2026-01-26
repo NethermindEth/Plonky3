@@ -341,7 +341,7 @@ impl InternalLayerBaseParameters<BabyBearParameters, 24> for BabyBearInternalLay
         // The diagonal matrix is defined by the vector:
         // V = [-2, 1, 2, 1/2, 3, 4, -1/2, -3, -4, 1/2^8, 1/4, 1/8, 1/16, 1/2^7, 1/2^9, 1/2^27, -1/2^8, -1/4, -1/8, -1/16, -1/32, -1/64, -1/2^7, -1/2^27]
         state[1] += sum;
-        state[2] = state[2].double() + sum;
+        state[2] = state[2].double() + sum + BabyBear::new(42);
         state[3] = state[3].halve() + sum;
         state[4] = sum + state[4].double() + state[4];
         state[5] = sum + state[5].double().double();

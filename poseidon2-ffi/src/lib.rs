@@ -12,20 +12,72 @@ use p3_field::PrimeField32;
 use p3_symmetric::Permutation;
 
 // =============================================================================
+// Safety check helpers
+// =============================================================================
+
+/// Panics if the pointer is null.
+#[inline]
+fn assert_not_null<T>(ptr: *const T, name: &str) {
+    assert!(!ptr.is_null(), "FFI safety violation: {name} pointer is null");
+}
+
+/// Panics if the pointer is null (mutable version).
+#[inline]
+fn assert_not_null_mut<T>(ptr: *mut T, name: &str) {
+    assert!(!ptr.is_null(), "FFI safety violation: {name} pointer is null");
+}
+
+/// Panics if the pointer is not properly aligned for type T.
+#[inline]
+fn assert_aligned<T>(ptr: *const T, name: &str) {
+    let align = core::mem::align_of::<T>();
+    assert!(
+        (ptr as usize) % align == 0,
+        "FFI safety violation: {name} pointer is not aligned (required: {align}-byte alignment, got address: {:p})",
+        ptr
+    );
+}
+
+/// Panics if the mutable pointer is not properly aligned for type T.
+#[inline]
+fn assert_aligned_mut<T>(ptr: *mut T, name: &str) {
+    let align = core::mem::align_of::<T>();
+    assert!(
+        (ptr as usize) % align == 0,
+        "FFI safety violation: {name} pointer is not aligned (required: {align}-byte alignment, got address: {:p})",
+        ptr
+    );
+}
+
+// =============================================================================
 // Width 16 (64 bytes)
 // =============================================================================
 
 /// Applies the Poseidon2 BabyBear16 permutation to the input state.
 ///
+/// # Panics
+///
+/// This function will panic if:
+/// - `input` is null
+/// - `output` is null
+/// - `input` is not 4-byte aligned
+/// - `output` is not 4-byte aligned
+///
 /// # Safety
 ///
-/// - `input` must be a valid pointer to an array of 16 `u32` values
-/// - `output` must be a valid pointer to an array of 16 `u32` values with write access
+/// - `input` must point to at least 16 valid `u32` values
+/// - `output` must point to at least 16 `u32` values with write access
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear16_permute(
     input: *const u32,
     output: *mut u32,
 ) {
+    // Runtime safety checks
+    assert_not_null(input, "input");
+    assert_not_null_mut(output, "output");
+    assert_aligned(input, "input");
+    assert_aligned_mut(output, "output");
+
     let poseidon2 = default_babybear_poseidon2_16();
     
     let mut state: [BabyBear; 16] = core::array::from_fn(|i| {
@@ -44,6 +96,12 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute(
 
 /// Wrapper function for Lean FFI that works with byte arrays (width 16).
 ///
+/// # Panics
+///
+/// This function will panic if:
+/// - `input_ptr` is null
+/// - `output_ptr` is null
+///
 /// # Safety
 ///
 /// - `input_ptr` must point to at least 64 bytes of readable memory
@@ -53,6 +111,10 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute_bytes(
     input_ptr: *const u8,
     output_ptr: *mut u8,
 ) {
+    // Runtime safety checks
+    assert_not_null(input_ptr, "input_ptr");
+    assert_not_null_mut(output_ptr, "output_ptr");
+
     let poseidon2 = default_babybear_poseidon2_16();
 
     let mut state: [BabyBear; 16] = core::array::from_fn(|i| {
@@ -90,15 +152,29 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute_bytes(
 
 /// Applies the Poseidon2 BabyBear24 permutation to the input state.
 ///
+/// # Panics
+///
+/// This function will panic if:
+/// - `input` is null
+/// - `output` is null
+/// - `input` is not 4-byte aligned
+/// - `output` is not 4-byte aligned
+///
 /// # Safety
 ///
-/// - `input` must be a valid pointer to an array of 24 `u32` values
-/// - `output` must be a valid pointer to an array of 24 `u32` values with write access
+/// - `input` must point to at least 24 valid `u32` values
+/// - `output` must point to at least 24 `u32` values with write access
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear24_permute(
     input: *const u32,
     output: *mut u32,
 ) {
+    // Runtime safety checks
+    assert_not_null(input, "input");
+    assert_not_null_mut(output, "output");
+    assert_aligned(input, "input");
+    assert_aligned_mut(output, "output");
+
     let poseidon2 = default_babybear_poseidon2_24();
 
     let mut state: [BabyBear; 24] = core::array::from_fn(|i| {
@@ -117,6 +193,12 @@ pub unsafe extern "C" fn lean_poseidon2_babybear24_permute(
 
 /// Wrapper function for Lean FFI that works with byte arrays (width 24).
 ///
+/// # Panics
+///
+/// This function will panic if:
+/// - `input_ptr` is null
+/// - `output_ptr` is null
+///
 /// # Safety
 ///
 /// - `input_ptr` must point to at least 96 bytes of readable memory
@@ -126,6 +208,10 @@ pub unsafe extern "C" fn lean_poseidon2_babybear24_permute_bytes(
     input_ptr: *const u8,
     output_ptr: *mut u8,
 ) {
+    // Runtime safety checks
+    assert_not_null(input_ptr, "input_ptr");
+    assert_not_null_mut(output_ptr, "output_ptr");
+
     let poseidon2 = default_babybear_poseidon2_24();
 
     let mut state: [BabyBear; 24] = core::array::from_fn(|i| {
@@ -246,6 +332,60 @@ mod tests {
                 output_bytes[i * 4 + 3],
             ]);
             assert_eq!(bytes_val, output_u32[i], "Byte/u32 mismatch at index {}", i);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input pointer is null")]
+    fn test_null_input_16() {
+        let mut output: [u32; 16] = [0; 16];
+        unsafe {
+            lean_poseidon2_babybear16_permute(core::ptr::null(), output.as_mut_ptr());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "output pointer is null")]
+    fn test_null_output_16() {
+        let input: [u32; 16] = [0; 16];
+        unsafe {
+            lean_poseidon2_babybear16_permute(input.as_ptr(), core::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input_ptr pointer is null")]
+    fn test_null_input_bytes_16() {
+        let mut output: [u8; 64] = [0; 64];
+        unsafe {
+            lean_poseidon2_babybear16_permute_bytes(core::ptr::null(), output.as_mut_ptr());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "output_ptr pointer is null")]
+    fn test_null_output_bytes_16() {
+        let input: [u8; 64] = [0; 64];
+        unsafe {
+            lean_poseidon2_babybear16_permute_bytes(input.as_ptr(), core::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input pointer is null")]
+    fn test_null_input_24() {
+        let mut output: [u32; 24] = [0; 24];
+        unsafe {
+            lean_poseidon2_babybear24_permute(core::ptr::null(), output.as_mut_ptr());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "output pointer is null")]
+    fn test_null_output_24() {
+        let input: [u32; 24] = [0; 24];
+        unsafe {
+            lean_poseidon2_babybear24_permute(input.as_ptr(), core::ptr::null_mut());
         }
     }
 }

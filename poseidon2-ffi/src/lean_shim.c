@@ -2,17 +2,54 @@
  * C shim for Lean4 FFI to Poseidon2 Rust implementation.
  *
  * This file provides the bridge between Lean's object system and
- * the C-compatible Rust functions.
+ * the C-compatible Rust functions for multiple widths (16, 24).
  */
 
 #include <lean/lean.h>
 #include <stdint.h>
 
-/* Forward declaration of the Rust function */
+/* Forward declarations of the Rust functions */
+extern void lean_poseidon2_babybear16_permute_bytes(
+    const uint8_t* input_ptr,
+    uint8_t* output_ptr
+);
+
 extern void lean_poseidon2_babybear24_permute_bytes(
     const uint8_t* input_ptr,
     uint8_t* output_ptr
 );
+
+/*
+ * Lean FFI wrapper for Poseidon2 BabyBear16 permutation.
+ *
+ * Takes a ByteArray of 64 bytes (16 × 4-byte little-endian u32 values)
+ * and returns a new ByteArray of 64 bytes with the permuted state.
+ *
+ * Lean signature: @[extern "lean_poseidon2_babybear16_permute_wrapper"]
+ *                 opaque poseidon2Permute16Raw : @& ByteArray → ByteArray
+ */
+LEAN_EXPORT lean_obj_res lean_poseidon2_babybear16_permute_wrapper(b_lean_obj_arg input) {
+    /* Get the size of the input ByteArray */
+    size_t input_size = lean_sarray_size(input);
+    
+    /* Validate input size (should be 64 bytes = 16 * 4) */
+    if (input_size != 64) {
+        /* Return empty ByteArray on invalid input */
+        return lean_alloc_sarray(1, 0, 0);
+    }
+    
+    /* Get pointer to input data */
+    const uint8_t* input_ptr = lean_sarray_cptr(input);
+    
+    /* Allocate output ByteArray */
+    lean_obj_res output = lean_alloc_sarray(1, 64, 64);
+    uint8_t* output_ptr = lean_sarray_cptr(output);
+    
+    /* Call the Rust permutation function */
+    lean_poseidon2_babybear16_permute_bytes(input_ptr, output_ptr);
+    
+    return output;
+}
 
 /*
  * Lean FFI wrapper for Poseidon2 BabyBear24 permutation.

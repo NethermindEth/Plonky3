@@ -8,15 +8,19 @@
 #include <lean/lean.h>
 #include <stdint.h>
 
-/* Forward declarations of the Rust functions */
+/* Forward declarations of the Rust functions (with length parameters) */
 extern void lean_poseidon2_babybear16_permute_bytes(
     const uint8_t* input_ptr,
-    uint8_t* output_ptr
+    size_t input_len,
+    uint8_t* output_ptr,
+    size_t output_len
 );
 
 extern void lean_poseidon2_babybear24_permute_bytes(
     const uint8_t* input_ptr,
-    uint8_t* output_ptr
+    size_t input_len,
+    uint8_t* output_ptr,
+    size_t output_len
 );
 
 /*
@@ -45,8 +49,8 @@ LEAN_EXPORT lean_obj_res lean_poseidon2_babybear16_permute_wrapper(b_lean_obj_ar
     lean_obj_res output = lean_alloc_sarray(1, 64, 64);
     uint8_t* output_ptr = lean_sarray_cptr(output);
     
-    /* Call the Rust permutation function */
-    lean_poseidon2_babybear16_permute_bytes(input_ptr, output_ptr);
+    /* Call the Rust permutation function with explicit lengths */
+    lean_poseidon2_babybear16_permute_bytes(input_ptr, input_size, output_ptr, 64);
     
     return output;
 }
@@ -77,8 +81,8 @@ LEAN_EXPORT lean_obj_res lean_poseidon2_babybear24_permute_wrapper(b_lean_obj_ar
     lean_obj_res output = lean_alloc_sarray(1, 96, 96);
     uint8_t* output_ptr = lean_sarray_cptr(output);
     
-    /* Call the Rust permutation function */
-    lean_poseidon2_babybear24_permute_bytes(input_ptr, output_ptr);
+    /* Call the Rust permutation function with explicit lengths */
+    lean_poseidon2_babybear24_permute_bytes(input_ptr, input_size, output_ptr, 96);
     
     return output;
 }

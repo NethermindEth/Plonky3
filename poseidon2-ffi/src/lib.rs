@@ -49,6 +49,15 @@ fn assert_aligned_mut<T>(ptr: *mut T, name: &str) {
     );
 }
 
+/// Panics if the length doesn't match the expected value.
+#[inline]
+fn assert_length(actual: usize, expected: usize, context: &str) {
+    assert!(
+        actual == expected,
+        "FFI safety violation: {context} length mismatch (expected {expected}, got {actual})"
+    );
+}
+
 // =============================================================================
 // Width 16 (64 bytes)
 // =============================================================================
@@ -62,6 +71,8 @@ fn assert_aligned_mut<T>(ptr: *mut T, name: &str) {
 /// - `output` is null
 /// - `input` is not 4-byte aligned
 /// - `output` is not 4-byte aligned
+/// - `input_len` is not exactly 16
+/// - `output_len` is not exactly 16
 ///
 /// # Safety
 ///
@@ -70,13 +81,17 @@ fn assert_aligned_mut<T>(ptr: *mut T, name: &str) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear16_permute(
     input: *const u32,
+    input_len: usize,
     output: *mut u32,
+    output_len: usize,
 ) {
     // Runtime safety checks
     assert_not_null(input, "input");
     assert_not_null_mut(output, "output");
     assert_aligned(input, "input");
     assert_aligned_mut(output, "output");
+    assert_length(input_len, 16, "input");
+    assert_length(output_len, 16, "output");
 
     let poseidon2 = default_babybear_poseidon2_16();
     
@@ -101,6 +116,8 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute(
 /// This function will panic if:
 /// - `input_ptr` is null
 /// - `output_ptr` is null
+/// - `input_len` is not exactly 64
+/// - `output_len` is not exactly 64
 ///
 /// # Safety
 ///
@@ -109,11 +126,15 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear16_permute_bytes(
     input_ptr: *const u8,
+    input_len: usize,
     output_ptr: *mut u8,
+    output_len: usize,
 ) {
     // Runtime safety checks
     assert_not_null(input_ptr, "input_ptr");
     assert_not_null_mut(output_ptr, "output_ptr");
+    assert_length(input_len, 64, "input");
+    assert_length(output_len, 64, "output");
 
     let poseidon2 = default_babybear_poseidon2_16();
 
@@ -159,6 +180,8 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute_bytes(
 /// - `output` is null
 /// - `input` is not 4-byte aligned
 /// - `output` is not 4-byte aligned
+/// - `input_len` is not exactly 24
+/// - `output_len` is not exactly 24
 ///
 /// # Safety
 ///
@@ -167,13 +190,17 @@ pub unsafe extern "C" fn lean_poseidon2_babybear16_permute_bytes(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear24_permute(
     input: *const u32,
+    input_len: usize,
     output: *mut u32,
+    output_len: usize,
 ) {
     // Runtime safety checks
     assert_not_null(input, "input");
     assert_not_null_mut(output, "output");
     assert_aligned(input, "input");
     assert_aligned_mut(output, "output");
+    assert_length(input_len, 24, "input");
+    assert_length(output_len, 24, "output");
 
     let poseidon2 = default_babybear_poseidon2_24();
 
@@ -198,6 +225,8 @@ pub unsafe extern "C" fn lean_poseidon2_babybear24_permute(
 /// This function will panic if:
 /// - `input_ptr` is null
 /// - `output_ptr` is null
+/// - `input_len` is not exactly 96
+/// - `output_len` is not exactly 96
 ///
 /// # Safety
 ///
@@ -206,11 +235,15 @@ pub unsafe extern "C" fn lean_poseidon2_babybear24_permute(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lean_poseidon2_babybear24_permute_bytes(
     input_ptr: *const u8,
+    input_len: usize,
     output_ptr: *mut u8,
+    output_len: usize,
 ) {
     // Runtime safety checks
     assert_not_null(input_ptr, "input_ptr");
     assert_not_null_mut(output_ptr, "output_ptr");
+    assert_length(input_len, 96, "input");
+    assert_length(output_len, 96, "output");
 
     let poseidon2 = default_babybear_poseidon2_24();
 
@@ -253,7 +286,7 @@ mod tests {
         let mut output: [u32; 16] = [0; 16];
 
         unsafe {
-            lean_poseidon2_babybear16_permute(input.as_ptr(), output.as_mut_ptr());
+            lean_poseidon2_babybear16_permute(input.as_ptr(), 16, output.as_mut_ptr(), 16);
         }
 
         let poseidon2 = default_babybear_poseidon2_16();
@@ -271,7 +304,7 @@ mod tests {
         let mut output: [u32; 24] = [0; 24];
 
         unsafe {
-            lean_poseidon2_babybear24_permute(input.as_ptr(), output.as_mut_ptr());
+            lean_poseidon2_babybear24_permute(input.as_ptr(), 24, output.as_mut_ptr(), 24);
         }
 
         let poseidon2 = default_babybear_poseidon2_24();
@@ -290,12 +323,12 @@ mod tests {
         let mut output_bytes: [u8; 64] = [0; 64];
 
         unsafe {
-            lean_poseidon2_babybear16_permute_bytes(input_bytes.as_ptr(), output_bytes.as_mut_ptr());
+            lean_poseidon2_babybear16_permute_bytes(input_bytes.as_ptr(), 64, output_bytes.as_mut_ptr(), 64);
         }
 
         let mut output_u32: [u32; 16] = [0; 16];
         unsafe {
-            lean_poseidon2_babybear16_permute(input.as_ptr(), output_u32.as_mut_ptr());
+            lean_poseidon2_babybear16_permute(input.as_ptr(), 16, output_u32.as_mut_ptr(), 16);
         }
 
         for i in 0..16 {
@@ -316,12 +349,12 @@ mod tests {
         let mut output_bytes: [u8; 96] = [0; 96];
 
         unsafe {
-            lean_poseidon2_babybear24_permute_bytes(input_bytes.as_ptr(), output_bytes.as_mut_ptr());
+            lean_poseidon2_babybear24_permute_bytes(input_bytes.as_ptr(), 96, output_bytes.as_mut_ptr(), 96);
         }
 
         let mut output_u32: [u32; 24] = [0; 24];
         unsafe {
-            lean_poseidon2_babybear24_permute(input.as_ptr(), output_u32.as_mut_ptr());
+            lean_poseidon2_babybear24_permute(input.as_ptr(), 24, output_u32.as_mut_ptr(), 24);
         }
 
         for i in 0..24 {
@@ -335,12 +368,13 @@ mod tests {
         }
     }
 
+    // Null pointer tests
     #[test]
     #[should_panic(expected = "input pointer is null")]
     fn test_null_input_16() {
         let mut output: [u32; 16] = [0; 16];
         unsafe {
-            lean_poseidon2_babybear16_permute(core::ptr::null(), output.as_mut_ptr());
+            lean_poseidon2_babybear16_permute(core::ptr::null(), 16, output.as_mut_ptr(), 16);
         }
     }
 
@@ -349,7 +383,7 @@ mod tests {
     fn test_null_output_16() {
         let input: [u32; 16] = [0; 16];
         unsafe {
-            lean_poseidon2_babybear16_permute(input.as_ptr(), core::ptr::null_mut());
+            lean_poseidon2_babybear16_permute(input.as_ptr(), 16, core::ptr::null_mut(), 16);
         }
     }
 
@@ -358,7 +392,7 @@ mod tests {
     fn test_null_input_bytes_16() {
         let mut output: [u8; 64] = [0; 64];
         unsafe {
-            lean_poseidon2_babybear16_permute_bytes(core::ptr::null(), output.as_mut_ptr());
+            lean_poseidon2_babybear16_permute_bytes(core::ptr::null(), 64, output.as_mut_ptr(), 64);
         }
     }
 
@@ -367,7 +401,7 @@ mod tests {
     fn test_null_output_bytes_16() {
         let input: [u8; 64] = [0; 64];
         unsafe {
-            lean_poseidon2_babybear16_permute_bytes(input.as_ptr(), core::ptr::null_mut());
+            lean_poseidon2_babybear16_permute_bytes(input.as_ptr(), 64, core::ptr::null_mut(), 64);
         }
     }
 
@@ -376,7 +410,7 @@ mod tests {
     fn test_null_input_24() {
         let mut output: [u32; 24] = [0; 24];
         unsafe {
-            lean_poseidon2_babybear24_permute(core::ptr::null(), output.as_mut_ptr());
+            lean_poseidon2_babybear24_permute(core::ptr::null(), 24, output.as_mut_ptr(), 24);
         }
     }
 
@@ -385,7 +419,58 @@ mod tests {
     fn test_null_output_24() {
         let input: [u32; 24] = [0; 24];
         unsafe {
-            lean_poseidon2_babybear24_permute(input.as_ptr(), core::ptr::null_mut());
+            lean_poseidon2_babybear24_permute(input.as_ptr(), 24, core::ptr::null_mut(), 24);
+        }
+    }
+
+    // Length mismatch tests
+    #[test]
+    #[should_panic(expected = "input length mismatch (expected 16, got 8)")]
+    fn test_wrong_input_len_16() {
+        let input: [u32; 16] = [0; 16];
+        let mut output: [u32; 16] = [0; 16];
+        unsafe {
+            lean_poseidon2_babybear16_permute(input.as_ptr(), 8, output.as_mut_ptr(), 16);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "output length mismatch (expected 16, got 24)")]
+    fn test_wrong_output_len_16() {
+        let input: [u32; 16] = [0; 16];
+        let mut output: [u32; 16] = [0; 16];
+        unsafe {
+            lean_poseidon2_babybear16_permute(input.as_ptr(), 16, output.as_mut_ptr(), 24);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input length mismatch (expected 64, got 32)")]
+    fn test_wrong_input_len_bytes_16() {
+        let input: [u8; 64] = [0; 64];
+        let mut output: [u8; 64] = [0; 64];
+        unsafe {
+            lean_poseidon2_babybear16_permute_bytes(input.as_ptr(), 32, output.as_mut_ptr(), 64);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input length mismatch (expected 24, got 16)")]
+    fn test_wrong_input_len_24() {
+        let input: [u32; 24] = [0; 24];
+        let mut output: [u32; 24] = [0; 24];
+        unsafe {
+            lean_poseidon2_babybear24_permute(input.as_ptr(), 16, output.as_mut_ptr(), 24);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "input length mismatch (expected 96, got 64)")]
+    fn test_wrong_input_len_bytes_24() {
+        let input: [u8; 96] = [0; 96];
+        let mut output: [u8; 96] = [0; 96];
+        unsafe {
+            lean_poseidon2_babybear24_permute_bytes(input.as_ptr(), 64, output.as_mut_ptr(), 96);
         }
     }
 }

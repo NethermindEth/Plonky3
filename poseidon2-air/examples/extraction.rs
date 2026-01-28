@@ -1,7 +1,7 @@
 use p3_baby_bear::{BABYBEAR_RC16_EXTERNAL_FINAL, BABYBEAR_RC16_EXTERNAL_INITIAL, BABYBEAR_RC16_INTERNAL, BabyBear, GenericPoseidon2LinearLayersBabyBear};
 // use p3_field::PrimeCharacteristicRing;
 use p3_poseidon2_air::{Poseidon2Air, RoundConstants};
-use p3_air::{Air, BaseAir, symbolic_builder::SymbolicAirBuilder};
+use p3_air::{Air, BaseAir, caching_symbolic_builder::CachingSymbolicAirBuilder, symbolic_builder::SymbolicAirBuilder};
 
 pub fn main() {
     // let beginning_full_round_constants = [
@@ -56,7 +56,13 @@ pub fn main() {
 
 
 
-    let mut sbuilder = SymbolicAirBuilder::<BabyBear, BabyBear, ()>::new(0, air.width(), 0, 0);
+    let mut sbuilder = CachingSymbolicAirBuilder::<BabyBear, BabyBear>::new(
+        0,
+        air.width(),
+        0,
+        0,
+        0
+    );
     air.eval(&mut sbuilder);
     sbuilder.print_lean_constraints();
 }

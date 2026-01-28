@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use alloc::vec;
@@ -309,14 +309,14 @@ fn get_symbolic_variable_leaf_string_set<F: Field>(
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum CachedBinaryOp {
     Add,
     Sub,
     Mul
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum CachedSymbolicExpression {
     Leaf(String),
     Neg(usize),
@@ -330,19 +330,17 @@ enum CachedSymbolicExpression {
 fn cache_symbolic_expression_walk_leaf<F: Field>(
     x: &SymbolicExpression<F>,
     characteristic: Option<u32>,
-    cache: &mut Vec<CachedSymbolicExpression>
-) -> usize {
-    let str = symbolic_expression_to_lean_string(&x, None);
-    match cache.iter().find_position(|c| match c {
-        CachedSymbolicExpression::Leaf(cached_str) => str.eq(cached_str),
-        CachedSymbolicExpression::Neg(_) => false,
-        CachedSymbolicExpression::Binary { lhs: _, rhs: _, op: _ } => false,
-    }) {
-        Some((idx, _)) => idx,
+    cache: &mut HashMap<CachedSymbolicExpression, usize>
+) -> usize {    
+    let str = symbolic_expression_to_lean_string(&x, characteristic);
+    let node = CachedSymbolicExpression::Leaf(str);
+
+    match cache.get(&node) {
+        Some(x) => *x,
         None => {
-            let cached = CachedSymbolicExpression::Leaf(str);
-            cache.push(cached);
-            cache.len() - 1
+            let idx = cache.len();
+            cache.insert(node, idx);
+            idx
         },
     }
 }
@@ -352,27 +350,22 @@ fn cache_symbolic_expression_walk_binary<F: Field>(
     rhs: &SymbolicExpression<F>,
     node_op: CachedBinaryOp,
     characteristic: Option<u32>,
-    cache: &mut Vec<CachedSymbolicExpression>
+    cache: &mut HashMap<CachedSymbolicExpression, usize>
 ) -> usize {
     let left_child = cache_symbolic_expression_walk(lhs, characteristic, cache);
     let right_child = cache_symbolic_expression_walk(rhs, characteristic, cache);
-    match cache.iter().find_position(|c| match c {
-        CachedSymbolicExpression::Leaf(_) => false,
-        CachedSymbolicExpression::Neg(_) => false,
-        CachedSymbolicExpression::Binary { lhs, rhs, op } =>
-            *lhs == left_child &&
-            *rhs == right_child &&
-            *op == node_op,
-    }) {
-        Some((idx, _)) => idx,
+    let node = CachedSymbolicExpression::Binary {
+        lhs: left_child,
+        rhs: right_child,
+        op: node_op
+    };
+
+    match cache.get(&node) {
+        Some(x) => *x,
         None => {
-            let cached = CachedSymbolicExpression::Binary{
-                lhs: left_child,
-                rhs: right_child,
-                op: node_op,
-            };
-            cache.push(cached);
-            cache.len() - 1
+            let idx = cache.len();
+            cache.insert(node, idx);
+            idx
         },
     }
 }
@@ -380,9 +373,9 @@ fn cache_symbolic_expression_walk_binary<F: Field>(
 fn cache_symbolic_expression_walk<F: Field>(
     x: &SymbolicExpression<F>,
     characteristic: Option<u32>,
-    cache: &mut Vec<CachedSymbolicExpression>
+    cache: &mut HashMap<CachedSymbolicExpression, usize>
 ) -> usize {
-    println!("Cache size: {}", cache.len());
+    // println!("Cache size: {}", cache.len());
     match x {
         SymbolicExpression::Variable(_) => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
         SymbolicExpression::IsFirstRow => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
@@ -391,16 +384,14 @@ fn cache_symbolic_expression_walk<F: Field>(
         SymbolicExpression::Constant(_) => cache_symbolic_expression_walk_leaf(x, characteristic, cache),
         SymbolicExpression::Neg { x, degree_multiple: _ } => {
             let child = cache_symbolic_expression_walk(x, characteristic, cache);
-            match cache.iter().find_position(|c| match c {
-                CachedSymbolicExpression::Leaf(_) => false,
-                CachedSymbolicExpression::Neg(idx) => *idx == child,
-                CachedSymbolicExpression::Binary { lhs: _, rhs: _, op: _ } => false,
-            }) {
-                Some((idx, _)) => idx,
+            let node = CachedSymbolicExpression::Neg(child);
+
+            match cache.get(&node) {
+                Some(x) => *x,
                 None => {
-                    let cached = CachedSymbolicExpression::Neg(child);
-                    cache.push(cached);
-                    cache.len() - 1
+                    let idx = cache.len();
+                    cache.insert(node, idx);
+                    idx
                 },
             }
         },
@@ -416,11 +407,11 @@ fn cache_symbolic_expression_walk<F: Field>(
 fn cache_symbolic_expression<F: Field>(
     x: &SymbolicExpression<F>,
     characteristic: Option<u32>
-) -> Vec<CachedSymbolicExpression> {
+) -> HashMap<CachedSymbolicExpression, usize> {
     println!("Caching");
     println!("Calculating size:");
     println!("  {}", symbolic_expression_size(x));
-    let mut cache = Vec::new();
+    let mut cache = HashMap::new();
     let result = cache_symbolic_expression_walk(&x, characteristic, &mut cache);
     assert!(cache.len() - 1 == result, "Cache symbolic expression returned an index other than the last in the cache");
     cache
@@ -431,14 +422,18 @@ pub fn symbolic_expression_to_condensed_lean_string<F: Field>(
     characteristic: Option<u32>,
 ) -> String {
 
-    let cache = cache_symbolic_expression(x, characteristic);
+    let cache = cache_symbolic_expression(x, characteristic)
+        .into_iter()
+        .sorted_by(|(_, l_id), (_, r_id)| {
+            l_id.cmp(r_id)
+        })
+        .collect_vec();
 
     println!("Rendering");
 
     let let_exprs = cache
         .iter()
-        .enumerate()
-        .map(|(idx, expr)| match expr {
+        .map(|(expr, idx)| match expr {
             CachedSymbolicExpression::Leaf(str) => format!("let x{idx} := {str}"),
             CachedSymbolicExpression::Neg(child) => format!("let x{idx} := -x{}", child),
             CachedSymbolicExpression::Binary { lhs, rhs, op } => match op {
@@ -581,8 +576,8 @@ where
                 .base_constraints
                 .iter()
                 .enumerate()
-                // .skip(138)
-                .take(160) {
+                .skip(200)
+                .take(16) {
             println!("Printing constraint {idx}");
             let constraint_text = format!(
                 "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n{} = 0\n",

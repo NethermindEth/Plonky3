@@ -43,8 +43,8 @@ pub fn main() {
         BabyBear,
         GenericPoseidon2LinearLayersBabyBear,
         24,
-        7,
-        1,
+        11,
+        2,
         4,
         21
     > = Poseidon2Air::new(

@@ -1,4 +1,4 @@
-use p3_koala_bear::{KOALABEAR_RC24_EXTERNAL_FINAL, KOALABEAR_RC24_EXTERNAL_INITIAL, KOALABEAR_RC24_INTERNAL, KoalaBear, GenericPoseidon2LinearLayersKoalaBear};
+use p3_koala_bear::{KOALABEAR_RC16_EXTERNAL_FINAL, KOALABEAR_RC16_EXTERNAL_INITIAL, KOALABEAR_RC16_INTERNAL, KoalaBear, GenericPoseidon2LinearLayersKoalaBear};
 // use p3_field::PrimeCharacteristicRing;
 use p3_poseidon2_air::{Poseidon2Air, RoundConstants};
 use p3_air::{Air, BaseAir, caching_symbolic_builder::CachingSymbolicAirBuilder, symbolic_builder::SymbolicAirBuilder};
@@ -33,20 +33,20 @@ pub fn main() {
     //     BabyBear::from_i32(605745517)
     // ];
 
-    let constants: RoundConstants<KoalaBear, 24, 4, 23> = RoundConstants::new(
-        KOALABEAR_RC24_EXTERNAL_INITIAL, //beginning_full_round_constants, 
-        KOALABEAR_RC24_INTERNAL, //partial_round_constants,
-        KOALABEAR_RC24_EXTERNAL_FINAL, //ending_full_round_constants
+    let constants: RoundConstants<KoalaBear, 16, 4, 20> = RoundConstants::new(
+        KOALABEAR_RC16_EXTERNAL_INITIAL, //beginning_full_round_constants, 
+        KOALABEAR_RC16_INTERNAL, //partial_round_constants,
+        KOALABEAR_RC16_EXTERNAL_FINAL, //ending_full_round_constants
     );
     println!("Constants: {constants:?}");
     let air: Poseidon2Air<
         KoalaBear,
         GenericPoseidon2LinearLayersKoalaBear,
-        24,
+        16,
         11,
         2,
         4,
-        23
+        20
     > = Poseidon2Air::new(
         constants
     );

@@ -81,6 +81,23 @@ pub fn exp_1725656503<R: PrimeCharacteristicRing>(val: R) -> R {
     p1100110110110110110110110110000 * p111
 }
 
+/// Compute the exponential `x -> x^1647217571`.
+///
+/// This computes the eleventh root of `x` if `x` is a member of the field `BabyBear`.
+/// This follows from the computation: `11 * 1647217571 = 9*(2^31 - 2^27) + 1 = 1 mod (p - 1)`.
+/// 
+/// Calculated using sage math (See https://www.sagemath.org/)
+/// 
+/// sage: BB=2013265921
+/// sage: g, s, t = xgcd(11, BB-1)
+/// sage: s
+/// -366048349
+/// sage: s % (BB-1)
+/// 1647217571
+pub fn exp_1647217571<R : PrimeCharacteristicRing>(val : R) -> R {
+    val.exp_u64(1647217571)
+}
+
 /// Compute the exponential `x -> x^10540996611094048183` using a custom addition chain.
 ///
 /// This map computes the seventh root of `x` if `x` is a member of the field `Goldilocks`.

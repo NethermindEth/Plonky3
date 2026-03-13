@@ -46,6 +46,14 @@ pub type Poseidon2BabyBear<const WIDTH: usize> = Poseidon2<
     BABYBEAR_S_BOX_DEGREE,
 >;
 
+pub type Poseidon2BabyBearSBox11<const WIDTH: usize> = Poseidon2<
+    BabyBear,
+    Poseidon2ExternalLayerBabyBear<WIDTH>,
+    Poseidon2InternalLayerBabyBear<WIDTH>,
+    WIDTH,
+    11,
+>;
+
 /// An implementation of the matrix multiplications in the internal and external layers of Poseidon2.
 ///
 /// This can act on `[A; WIDTH]` for any ring implementing `Algebra<BabyBear>`.
@@ -200,6 +208,17 @@ pub const BABYBEAR_RC24_INTERNAL: [BabyBear; 21] = BabyBear::new_array([
 ///
 /// See https://github.com/HorizenLabs/poseidon2/blob/main/plain_implementations/src/poseidon2/poseidon2_instance_babybear.rs
 pub fn default_babybear_poseidon2_24() -> Poseidon2BabyBear<24> {
+    Poseidon2::new(
+        ExternalLayerConstants::new(
+            BABYBEAR_RC24_EXTERNAL_INITIAL.to_vec(),
+            BABYBEAR_RC24_EXTERNAL_FINAL.to_vec(),
+        ),
+        BABYBEAR_RC24_INTERNAL.to_vec(),
+    )
+}
+
+/// A default Poseidon2 for BabyBear using SBox degree 11 and the same round constants as above in `default_babybear_poseidon2_24`.
+pub fn default_babybear_poseidon2_24_sbox_11() -> Poseidon2BabyBearSBox11<24> {
     Poseidon2::new(
         ExternalLayerConstants::new(
             BABYBEAR_RC24_EXTERNAL_INITIAL.to_vec(),

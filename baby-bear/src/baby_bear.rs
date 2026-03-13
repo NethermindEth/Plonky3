@@ -1,4 +1,4 @@
-use p3_field::exponentiation::exp_1725656503;
+use p3_field::exponentiation::{exp_1647217571, exp_1725656503};
 use p3_field::{Algebra, PrimeCharacteristicRing};
 use p3_monty_31::{
     BarrettParameters, BinomialExtensionData, FieldParameters, MontyField31, MontyParameters,
@@ -34,6 +34,24 @@ impl RelativelyPrimePower<7> for BabyBearParameters {
     /// This follows from the calculation `7 * 1725656503 = 6*(2^31 - 2^27) + 1 = 1 mod (p - 1)`.
     fn exp_root_d<R: PrimeCharacteristicRing>(val: R) -> R {
         exp_1725656503(val)
+    }
+}
+
+impl RelativelyPrimePower<11> for BabyBearParameters {
+    /// In the field `BabyBear`, `a^{1/11}` is equal to a^{1647217571}.
+    ///
+    /// This follows from the calculation `11 * 1647217571 = 9*(2^31 - 2^27) + 1 = 1 mod (p - 1)`.
+    ///
+    /// Calculated using sage math (See https://www.sagemath.org/)
+    /// 
+    /// sage: BB=2013265921
+    /// sage: g, s, t = xgcd(11, BB-1)
+    /// sage: s
+    /// -366048349
+    /// sage: s % (BB-1)
+    /// 1647217571
+    fn exp_root_d<R: PrimeCharacteristicRing>(val: R) -> R {
+        exp_1647217571(val)
     }
 }
 

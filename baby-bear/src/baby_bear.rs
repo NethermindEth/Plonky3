@@ -171,9 +171,36 @@ mod tests {
         let expected_prod = F::from_u32(0x1b5c8046);
         assert_eq!(m1 * m2, expected_prod);
 
-        assert_eq!(m1.injective_exp_n().injective_exp_root_n(), m1);
-        assert_eq!(m2.injective_exp_n().injective_exp_root_n(), m2);
-        assert_eq!(F::TWO.injective_exp_n().injective_exp_root_n(), F::TWO);
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<7>>::injective_exp_n(&m1);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<7>>::injective_exp_root_n(&x);
+            assert_eq!(x, m1);
+        }
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<7>>::injective_exp_n(&m2);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<7>>::injective_exp_root_n(&x);
+            assert_eq!(x, m2);
+        }
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<7>>::injective_exp_n(&F::TWO);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<7>>::injective_exp_root_n(&x);
+            assert_eq!(x, F::TWO);
+        }
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<11>>::injective_exp_n(&m1);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<11>>::injective_exp_root_n(&x);
+            assert_eq!(x, m1);
+        }
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<11>>::injective_exp_n(&m2);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<11>>::injective_exp_root_n(&x);
+            assert_eq!(x, m2);
+        }
+        {
+            let x = <MontyField31<BabyBearParameters> as InjectiveMonomial<11>>::injective_exp_n(&F::TWO);
+            let x = <MontyField31<BabyBearParameters> as PermutationMonomial<11>>::injective_exp_root_n(&x);
+            assert_eq!(x, F::TWO);
+        }
 
         let f_serialized = serde_json::to_string(&f).unwrap();
         let f_deserialized: F = serde_json::from_str(&f_serialized).unwrap();

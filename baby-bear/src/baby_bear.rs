@@ -42,6 +42,9 @@ impl RelativelyPrimePower<11> for BabyBearParameters {
     ///
     /// This follows from the calculation `11 * 1647217571 = 9*(2^31 - 2^27) + 1 = 1 mod (p - 1)`.
     ///
+    /// Note that in the exponent we effectively use mod (p - 1) due to Fermat's Little Theorem
+    ///   and therefore the inverting is done mod (p - 1) rather than mod p.
+    /// 
     /// Calculated using sage math (See https://www.sagemath.org/)
     /// 
     /// sage: BB=2013265921

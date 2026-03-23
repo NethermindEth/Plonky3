@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::rc::Rc;
+use std::collections::{BTreeSet, HashMap};
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -27,16 +26,16 @@ fn symbolic_expression_size<F>(x: &SymbolicExpression<F>) -> usize {
         SymbolicExpression::IsLastRow => 1,
         SymbolicExpression::IsTransition => 1,
         SymbolicExpression::Constant(_) => 1,
-        SymbolicExpression::Add { x, y, degree_multiple } => {
+        SymbolicExpression::Add { x, y, degree_multiple: _ } => {
             1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
         },
-        SymbolicExpression::Sub { x, y, degree_multiple } => {
+        SymbolicExpression::Sub { x, y, degree_multiple: _ } => {
             1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
         },
-        SymbolicExpression::Neg { x, degree_multiple } => {
+        SymbolicExpression::Neg { x, degree_multiple: _ } => {
             1 + symbolic_expression_size(&x)
         },
-        SymbolicExpression::Mul { x, y, degree_multiple } => {
+        SymbolicExpression::Mul { x, y, degree_multiple: _ } => {
             1 + symbolic_expression_size(&x) + symbolic_expression_size(&y)
         },
     }
@@ -576,12 +575,11 @@ where
                 .base_constraints
                 .iter()
                 .enumerate()
-                .skip(200)
-                .take(16) {
+        {
             println!("Printing constraint {idx}");
             let constraint_text = format!(
                 "  @[simp]\n  def constraint_{idx} {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ) :=\n{} = 0\n",
-                indent(symbolic_expression_to_condensed_lean_string(constraint, None), "    ")
+                indent(symbolic_expression_to_lean_string(constraint, None), "    ")
             );
 
             println!("{constraint_text}");
@@ -799,13 +797,13 @@ where
     pub fn print_lean_constraints(&self) {
         println!("Num constraints: {}", self.base_constraints.len());
         self.print_lean_base_constraints();
-        // self.print_lean_extension_field_constraints_warning();
-        // self.print_lean_interactions();
+        self.print_lean_extension_field_constraints_warning();
+        self.print_lean_interactions();
 
-        // self.print_lean_constraint_simplification();
-        // self.print_lean_interaction_simplification();
+        self.print_lean_constraint_simplification();
+        self.print_lean_interaction_simplification();
 
-        // self.print_lean_all_hold();
+        self.print_lean_all_hold();
         println!("------");
     }
 }

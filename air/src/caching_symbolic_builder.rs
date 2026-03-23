@@ -13,10 +13,6 @@ use crate::{
     PermutationAirBuilder,
 };
 
-fn indent(code: String, indentation: &str) -> String {
-    code.split("\n").map(|line| format!("{indentation}{line}")).join("\n")
-}
-
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     data: Vec<F>,
@@ -104,7 +100,7 @@ where
             }
             
             for public_idx in 0..num_public_values {
-                public_values.push(CopySymbolicVariable::Public{idx: main_idx});
+                public_values.push(CopySymbolicVariable::Public{idx: public_idx});
             }
             
             for challenge_idx in 0..num_challenges {
@@ -151,8 +147,7 @@ where
 
         let constraints = self.base_constraints
             .iter()
-            .enumerate()
-            .map(|(idx, constraint)| {
+            .map(|constraint| {
                 // println!("Merging {idx}");
                 match constraint {
                     CacheSymbolicExpression::Variable(var) => {
@@ -194,224 +189,9 @@ where
         }
     }
 
-    fn print_lean_extension_field_constraints_warning(&self) {
-        if !self.extension_constraints.is_empty() {
-            println!("-- WARNING: extension field constraints are not currently printed");
-        }
-    }
-
-    // fn print_lean_interactions(&self) {
-    //     let interactions_text = self
-    //         .interactions
-    //         .iter()
-    //         .map(|interaction| {
-    //             let multiplicity =
-    //                 symbolic_expression_to_lean_string(&interaction.multiplicity, None);
-    //             let data = format!(
-    //                 "[{}]",
-    //                 interaction
-    //                     .data
-    //                     .iter()
-    //                     .map(|x| symbolic_expression_to_lean_string(x, None))
-    //                     .join(", ")
-    //             );
-    //             format!("({multiplicity}, {data})")
-    //         })
-    //         .join(", ");
-
-    //     println!("  @[simp]");
-    //     println!(
-    //         "  def constrain_interactions {{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) :="
-    //     );
-    //     println!(
-    //         "    Circuit.bus c = (List.range (Circuit.last_row c + 1)).flatMap (λ row => [{interactions_text}])"
-    //     );
-    // }
-
-    fn simplification_proof() -> String {
-        [
-            "apply Iff.intro",
-            ". intro h",
-            "  simp [plonky3_encapsulation, NAME_constraint_and_interaction_simplification] at h",
-            "  simp only [NAME_constraint_and_interaction_simplification]",
-            "  exact h",
-            ". intro h",
-            "  simp [plonky3_encapsulation, NAME_constraint_and_interaction_simplification]",
-            "  simp only [NAME_constraint_and_interaction_simplification] at h",
-            "  exact h",
-        ]
-        .join("\n")
-    }
-
-    // fn print_lean_constraint_simplification(&self) {
-    //     println!("-----Constraint simplification------");
-    //     for (idx, constraint) in self.base_constraints.iter().enumerate() {
-    //         let constraint_text = format!(
-    //             "{}",
-    //             symbolic_expression_to_lean_string(constraint, None)
-    //         );
-
-    //         let simplified_constraint_text = [
-    //             format!("@[NAME_constraint_and_interaction_simplification]"),
-    //             format!("def constraint_{idx} (air : Valid_NAME F ExtF) (row : ℕ) : Prop :="),
-    //             format!("  sorry"),
-    //         ]
-    //         .join("\n");
-
-    //         let simplified_of_extracted = [
-    //             format!("@[NAME_air_simplification]"),
-    //             format!("lemma constraint_{idx}_of_extraction"),
-    //             format!("    (air : Valid_NAME F ExtF) (row : ℕ)"),
-    //             format!(
-    //                 ": NAME.extraction.constraint_{idx} air row ↔ constraint_{idx} air row := by"
-    //             ),
-    //             Self::simplification_proof(),
-    //         ]
-    //         .join("\n");
-
-    //         let output_text = format!("{simplified_constraint_text}\n\n{simplified_of_extracted}");
-
-    //         if constraint_text.contains("Circuit.permutation") {
-    //             let commented = output_text
-    //                 .split("\n")
-    //                 .map(|line| format!("-- {line}"))
-    //                 .join("\n");
-    //             println!("{commented}\n");
-    //         } else {
-    //             println!("{output_text}\n");
-    //         }
-    //     }
-    // }
-
-    fn print_lean_interaction_simplification(&self) {
-        println!("-----Interaction simplification-----");
-        {
-            let simplified_constraint_text = [
-                format!("@[NAME_constraint_and_interaction_simplification]"),
-                format!("def constrain_interactions (air : Valid_NAME F ExtF) : Prop :="),
-                format!("  sorry"),
-            ]
-            .join("\n");
-
-            let simplified_of_extracted = [
-                format!("@[NAME_air_simplification]"),
-                format!("lemma constrain_interactions_of_extraction"),
-                format!("    (air : Valid_NAME F ExtF)"),
-                format!(": NAME.extraction.constrain_interactions air ↔ constrain_interactions air := by"),
-                Self::simplification_proof()
-            ].join("\n");
-
-            let output_text = format!("{simplified_constraint_text}\n\n{simplified_of_extracted}");
-
-            println!("{output_text}\n");
-        }
-    }
-
-    fn print_lean_all_hold(&self) {
-        println!("-----All hold definitions-----------");
-
-        let num_constraints = self.base_constraints.len();
-
-        let extracted_row_constraint_list = (0..num_constraints)
-            .map(|idx| format!("    NAME.extraction.constraint_{idx} air row,"))
-            .join("\n");
-
-        let extract_row_constraint_list_def = [
-            format!("@[simp]"),
-            format!("def extracted_row_constraint_list"),
-            format!("  [Field ExtF]"),
-            format!("  (air : Valid_NAME FBB ExtF)"),
-            format!("  (row : ℕ)"),
-            format!(": List Prop :="),
-            format!("  ["),
-            extracted_row_constraint_list,
-            format!("  ]"),
-        ]
-        .join("\n");
-
-        let all_hold_def = [
-            "@[simp]",
-            "def allHold",
-            "  [Field ExtF]",
-            "  (air : Valid_NAME FBB ExtF)",
-            "  (row : ℕ)",
-            "  (_ : row ≤ air.last_row)",
-            ": Prop :=",
-            "  NAME.extraction.constrain_interactions air ∧",
-            "  List.Forall (·) (extracted_row_constraint_list air row)",
-        ]
-        .join("\n");
-
-        let row_constraint_list = (0..num_constraints)
-            .map(|idx| format!("    constraint_{idx} air row,"))
-            .join("\n");
-
-        let row_constraint_list_def = [
-            format!("@[simp]"),
-            format!("def row_constraint_list"),
-            format!("  [Field ExtF]"),
-            format!("  (air : Valid_NAME FBB ExtF)"),
-            format!("  (row : ℕ)"),
-            format!(": List Prop :="),
-            format!("  ["),
-            row_constraint_list,
-            format!("  ]"),
-        ]
-        .join("\n");
-
-        let all_hold_simplified = [
-            "@[simp]",
-            "def allHold_simplified",
-            "  [Field ExtF]",
-            "  (air : Valid_NAME FBB ExtF)",
-            "  (row : ℕ)",
-            "  (_ : row ≤ air.last_row)",
-            ": Prop :=",
-            "  constrain_interactions air ∧",
-            "  List.Forall (·) (row_constraint_list air row)",
-        ]
-        .join("\n");
-
-        let all_hold_simplified_of_all_hold = [
-            "lemma allHold_simplified_of_allHold",
-            "  [Field ExtF]",
-            "  (air : Valid_NAME FBB ExtF)",
-            "  (row : ℕ)",
-            "  (h_row : row ≤ air.last_row)",
-            ": allHold air row h_row ↔ allHold_simplified air row h_row := by",
-            "  unfold allHold allHold_simplified",
-            "  apply Iff.and",
-            "  . unfold NAME.extraction.constrain_interactions",
-            "    simp [plonky3_encapsulation]",
-            "    rfl",
-            "  . simp only [extracted_row_constraint_list,",
-            "              row_constraint_list,",
-            "              NAME_air_simplification]",
-        ]
-        .join("\n");
-
-        let all_hold_section = [
-            extract_row_constraint_list_def,
-            all_hold_def,
-            row_constraint_list_def,
-            all_hold_simplified,
-            all_hold_simplified_of_all_hold,
-        ]
-        .join("\n\n");
-
-        println!("{all_hold_section}");
-    }
-
     pub fn print_lean_constraints(&self) {
         println!("Num constraints: {}", self.base_constraints.len());
         self.print_lean_base_constraints();
-        // self.print_lean_extension_field_constraints_warning();
-        // self.print_lean_interactions();
-
-        // self.print_lean_constraint_simplification();
-        // self.print_lean_interaction_simplification();
-
-        // self.print_lean_all_hold();
         println!("------");
     }
 }

@@ -144,7 +144,7 @@ fn cache_expression_to_lean<F: Display>(x: &CacheExpression<F>) -> String {
 pub struct SymbolicCache<F>(pub Vec<CacheExpression<F>>);
 
 pub fn symbolic_cache_to_lean<F: Display>(cache: &SymbolicCache<F>, typename: &str) -> String {
-    let args = "{{C : Type → Type → Type}} {{F ExtF : Type}} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ)";
+    let args = "{C : Type → Type → Type} {F ExtF : Type} [Field F] [Field ExtF] [Circuit F ExtF C] (c : C F ExtF) (row: ℕ)";
 
     cache.0.iter()
         .enumerate()

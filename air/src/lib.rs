@@ -5,6 +5,7 @@
 extern crate alloc;
 
 mod air;
+#[cfg(feature = "extraction")]
 pub mod cached_symbolic_expression;
 #[cfg(feature = "extraction")]
 pub mod caching_symbolic_builder;

@@ -628,7 +628,7 @@ where
     T: Into<Self>
 {
     fn sub_assign(&mut self, rhs: T) {
-        *self = self.clone() + rhs.into();
+        *self = self.clone() - rhs.into();
     }
 }
 
@@ -741,7 +741,7 @@ where
     T: Into<Self>
 {
     fn mul_assign(&mut self, rhs: T) {
-        *self = self.clone() + rhs.into();
+        *self = self.clone() * rhs.into();
     }
 }
 
